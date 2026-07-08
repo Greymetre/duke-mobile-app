@@ -399,7 +399,7 @@ class LocationForegroundService : Service() {
 
   companion object {
     private const val TAG = "FieldKonnectLocation"
-    private const val BASE_URL = "https://ksb-pr.fieldkonnect.in/"
+    private const val BASE_URL = "https://duke.fieldkonnect.in/"
     private const val CHANNEL_ID = "fieldkonnect_live_location"
     private const val NOTIFICATION_ID = 9301
     private const val API_RESULT_NOTIFICATION_ID_BASE = 9400

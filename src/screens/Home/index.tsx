@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, StatusBar, Switch, FlatList, Pressable, TouchableOpacity, Modal, useWindowDimensions, Modal as RNModal, TextInput, ActivityIndicator, Alert, TouchableWithoutFeedback, KeyboardAvoidingView, Platform, } from 'react-native'
+import { View, ScrollView, StatusBar, Switch, FlatList, Pressable, TouchableOpacity, Modal, useWindowDimensions, Modal as RNModal, TextInput, ActivityIndicator, Alert, TouchableWithoutFeedback, KeyboardAvoidingView, Platform, } from 'react-native'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { styles } from './styles'
 import { rw } from '../../utils/responsive'
@@ -41,13 +41,12 @@ interface DropdownItem {
   value: string | number;
 }
 
-const userTypes = [
-  { id: '1', title: 'Distributor', icon: <FirstUserIcon />, navigateTO: "AddCustomer", title2: 'Distributor' },   // You can replace emoji with real SVG/icon
-  { id: '2', title: 'Retailer', icon: <SecondUserIcon />, navigateTO: "AddCustomer", title2: 'RETAILER' },
-  // { id: '3', title: 'Workshop', icon: <ThirdUserIcon />, navigateTO: "AddCustomer", title2: 'WORKSHOP' },
-  // { id: '4', title: 'Garage', icon: <FourthUserIcon />, navigateTO: "AddCustomer", title2: 'GARAGE' },
-  // { id: '5', title: 'Mechanic', icon: <FifthUserIcon />, navigateTO: "AddSecondaryCustomer", title2: 'MECHANIC' },
-];
+interface CustomerTypeItem {
+  id: string;
+  title: string;
+  value: string;
+}
+
 const Home = () => {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const dispatch = useDispatch();
@@ -83,6 +82,8 @@ const Home = () => {
   const [selectedUser, setSelectedUser] = useState<DropdownItem | null>(null);
   const [userSearchText, setUserSearchText] = useState('');
   const [showUserModal, setShowUserModal] = useState(false);
+  const [customerTypes, setCustomerTypes] = useState<CustomerTypeItem[]>([]);
+  const [customerTypesLoading, setCustomerTypesLoading] = useState(false);
 
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
@@ -181,7 +182,7 @@ const Home = () => {
       setLoadingPunchStatus(true);
       const token = store.getState()?.auth?.token;
 
-      const res = await axios.get('https://ksb-pr.fieldkonnect.in/api/getPunchin', {
+      const res = await axios.get('http://localhost:8000/api/getPunchin', {
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: 'application/json',
@@ -252,7 +253,7 @@ const Home = () => {
       setHomeLoading(true);
       const token = store.getState()?.auth?.token;
 
-      const res = await axios.get('https://ksb-pr.fieldkonnect.in/api/attendance/today-summary', {
+      const res = await axios.get('http://localhost:8000/api/attendance/today-summary', {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -273,7 +274,7 @@ const Home = () => {
       setLoadingBalances(true);
       const token = store.getState()?.auth?.token;
 
-      const res = await axios.get('https://ksb-pr.fieldkonnect.in/api/leaves/balance', {
+      const res = await axios.get('http://localhost:8000/api/leaves/balance', {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -312,7 +313,7 @@ const Home = () => {
       };
 
 
-      const res = await axios.post('https://ksb-pr.fieldkonnect.in/api/addLeaves', payload, {
+      const res = await axios.post('http://localhost:8000/api/addLeaves', payload, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -355,28 +356,26 @@ const Home = () => {
     }
   };
 
-  const handleSelectType = (type: string, title: any) => {
+  const isDistributorType = (title: string) =>
+    title?.toLowerCase?.().includes('distributor');
+
+  const handleSelectType = (title: string) => {
     actionSheetRef.current?.hide();
-    // Do whatever you want with the selected type
-    console.log('Selected:', type);
-    // Example: navigation.navigate('SomeScreen', { type }); 
+    console.log('Selected customer type:', title);
+
     if (pressType == 'add') {
-      if (title == "Distributor") {
-        navigation.navigate(type)
+      if (isDistributorType(title)) {
+        navigation.navigate('AddCustomer')
       } else {
         navigation.navigate('AddSecondaryCustomer', { type: title })
       }
     } else {
-      if (title == "Distributor") {
+      if (isDistributorType(title)) {
         navigation.navigate("CustomerList")
       } else {
         navigation.navigate("CustomerList", { type: title })
       }
-
     }
-
-
-    // Or dispatch an action, show toast, etc.
   };
 
   function getFirstName(fullName: string | null | undefined) {
@@ -489,10 +488,93 @@ const Home = () => {
     // isScrolling.value = 0;
   };
 
-  const filteredUserTypes =
-    pressType === 'add'
-      ? userTypes.filter(item => item.title === 'Retailer')
-      : userTypes;
+  const normalizeCustomerTypes = (payload: any): CustomerTypeItem[] => {
+    const rawList =
+      payload?.data?.data ??
+      payload?.data?.customer_types ??
+      payload?.data?.types ??
+      payload?.data ??
+      payload?.customer_types ??
+      payload?.types ??
+      payload;
+
+    if (!Array.isArray(rawList)) return [];
+
+    return rawList
+      .map((item: any, index: number) => {
+        const title = String(
+          item?.customertype_name ??
+          item?.name ??
+          item?.title ??
+          item?.customer_type ??
+          item?.type ??
+          item?.label ??
+          item?.value ??
+          ''
+        ).trim();
+
+        const value = String(
+          item?.customertype_name ??
+          item?.type ??
+          item?.value ??
+          item?.customer_type ??
+          item?.name ??
+          item?.title ??
+          title
+        ).trim();
+
+        if (!title || !value) return null;
+
+        return {
+          id: String(item?.id ?? item?.customertype ?? item?.value ?? `${value}-${index}`),
+          title,
+          value,
+        };
+      })
+      .filter(Boolean) as CustomerTypeItem[];
+  };
+
+  const fetchCustomerTypes = async () => {
+    try {
+      setCustomerTypesLoading(true);
+      const token = store.getState()?.auth?.token;
+
+      const res = await axios.get('http://localhost:8000/api/getCustomerTypeList', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+      });
+
+      const types = normalizeCustomerTypes(res?.data);
+      setCustomerTypes(types);
+
+      if (!types.length) {
+        Toast.show({
+          type: 'info',
+          text1: 'No customer types found',
+          position: 'top',
+        });
+      }
+    } catch (error) {
+      console.log('Customer type list error:', error);
+      setCustomerTypes([]);
+      Toast.show({
+        type: 'error',
+        text1: 'Failed to load customer types',
+        position: 'top',
+      });
+    } finally {
+      setCustomerTypesLoading(false);
+    }
+  };
+
+  const openCustomerTypeSheet = (type: 'add' | 'view') => {
+    setPressType(type);
+    setCustomerTypes([]);
+    actionSheetRef.current?.show();
+    fetchCustomerTypes();
+  };
 
 
   const fetchUsers = async (pageNum = 1) => {
@@ -504,7 +586,7 @@ const Home = () => {
 
     try {
       const response = await fetch(
-        `https://ksb-pr.fieldkonnect.in/api/getMyHierarchyUsers?type=RETAILER`,
+        `http://localhost:8000/api/getMyHierarchyUsers?type=RETAILER`,
         {
           method: 'GET',
           headers: {
@@ -567,7 +649,7 @@ const Home = () => {
       const token = store.getState()?.auth?.token;
 
       const response = await axios.get(
-        'https://ksb-pr.fieldkonnect.in/api/getAppVersion',
+        'http://localhost:8000/api/getAppVersion',
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -582,7 +664,7 @@ const Home = () => {
       const CURRENT_VERSION =
         Platform.OS === 'ios'
           ? '1.1'
-          : '1.3';
+          : '1.1';
 
       // ======================================
       // SERVER VERSION
@@ -713,13 +795,12 @@ const Home = () => {
                     <TileCard item={item} onpress={(item: any) => {
                       if (item?.id == 2 || item?.id == 3) {
                         if (item?.id == 2) {
-                          setPressType('add')
+                          openCustomerTypeSheet('add');
                         }
                         if (item?.id == 3) {
-                          setPressType('view')
+                          openCustomerTypeSheet('view');
                         }
-                        actionSheetRef.current?.show();
-                      } else if (item?.id == 5 || item?.id == 6) {
+                      } else if (item?.id == 6) {
                         Toast.show({
                           type: 'info',
                           text1: 'This feature is coming soon',
@@ -1161,35 +1242,50 @@ const Home = () => {
             family="InterSemiBold"
             align="center"
           >
-            Select User Type
+            Select Customer Type
           </AppText>
 
           {/* Options */}
-          {filteredUserTypes.map((type) => (
-            <TouchableOpacity
-              key={type.id}
-              activeOpacity={0.7}
-              onPress={() => handleSelectType(type.navigateTO, type?.title2)}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                paddingVertical: 16,
-                borderBottomWidth: 1,
-                borderBottomColor: '#F3F4F6',
-              }}
-            >
-              {/* Icon (emoji for now – replace with SVG later) */}
-              <Text style={{ fontSize: 24, marginRight: 16 }}>{type.icon}</Text>
+          {customerTypesLoading ? (
+            <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+              <ActivityIndicator color={colors.blue} />
+            </View>
+          ) : customerTypes.length ? (
+            customerTypes.map((type) => {
+              const Icon = isDistributorType(type.value) ? <FirstUserIcon /> : <SecondUserIcon />;
 
-              <AppText
-                size={16}
-                color="#1F2937"
-                family="InterMedium"
-              >
-                {type.title}
+              return (
+                <TouchableOpacity
+                  key={type.id}
+                  activeOpacity={0.7}
+                  onPress={() => handleSelectType(type.value)}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingVertical: 16,
+                    borderBottomWidth: 1,
+                    borderBottomColor: '#F3F4F6',
+                  }}
+                >
+                  <View style={{ marginRight: 16 }}>{Icon}</View>
+
+                  <AppText
+                    size={16}
+                    color="#1F2937"
+                    family="InterMedium"
+                  >
+                    {type.title}
+                  </AppText>
+                </TouchableOpacity>
+              );
+            })
+          ) : (
+            <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+              <AppText size={15} color="#6B7280" family="InterMedium">
+                No customer types found
               </AppText>
-            </TouchableOpacity>
-          ))}
+            </View>
+          )}
 
           {
             Platform.OS == "android" && (

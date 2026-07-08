@@ -25,7 +25,7 @@ type LoginFormValues = {
 
 const APP_VERSION =
   Platform.select({
-    android: '1.3',
+    android: '1.1',
     ios: '2.3',
   }) || appPackage.version;
 

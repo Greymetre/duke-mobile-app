@@ -103,7 +103,7 @@ const TourPlanPage = ({ navigation }: TourPlanPageProps) => {
     if (selectedBranch?.id) params.append('branch_id', String(selectedBranch.id));
     if (selectedDesignations.length > 0) params.append('designation', selectedDesignations.join(','));
 
-    return `https://ksb-pr.fieldkonnect.in/api/tour/userlist?${params.toString()}`;
+    return `http://localhost:8000/api/tour/userlist?${params.toString()}`;
   }, [selectedZone, selectedBranch, selectedDesignations]);
 
   const resetTourUserList = () => {
@@ -139,7 +139,7 @@ const TourPlanPage = ({ navigation }: TourPlanPageProps) => {
 
     try {
       const response = await fetch(
-        'https://ksb-pr.fieldkonnect.in/api/designations',
+        'http://localhost:8000/api/designations',
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -184,7 +184,7 @@ const TourPlanPage = ({ navigation }: TourPlanPageProps) => {
 
     try {
       const response = await fetch(
-        'https://ksb-pr.fieldkonnect.in/api/user-attendance-zone-branch',
+        'http://localhost:8000/api/user-attendance-zone-branch',
         {
           headers: {
             Authorization: `Bearer ${token}`,

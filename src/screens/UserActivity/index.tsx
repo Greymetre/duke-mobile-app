@@ -181,7 +181,7 @@ const UserActivityScreen = ({ navigation }: any) => {
       if (!token) return;
 
       const response = await axios.get(
-        'https://ksb-pr.fieldkonnect.in/api/designations',
+        'http://localhost:8000/api/designations',
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -225,7 +225,7 @@ const UserActivityScreen = ({ navigation }: any) => {
       if (!token) return;
 
       const response = await fetch(
-        'https://ksb-pr.fieldkonnect.in/api/user-attendance-zone-branch',
+        'http://localhost:8000/api/user-attendance-zone-branch',
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -262,7 +262,7 @@ const UserActivityScreen = ({ navigation }: any) => {
         end_date: formatYYYYMMDD(endDate)
       }, 'sadjfhaksjhdfkja', page)
       const response = await fetch(
-        'https://ksb-pr.fieldkonnect.in/api/reporting/users',
+        'http://localhost:8000/api/reporting/users',
         {
           method: 'POST',
           headers: {
@@ -330,7 +330,7 @@ const UserActivityScreen = ({ navigation }: any) => {
       if (!token) return;
 
       const response = await axios.get(
-        `https://ksb-pr.fieldkonnect.in/api/getHierarchyOrderStats`,
+        `http://localhost:8000/api/getHierarchyOrderStats`,
         {
           headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
           params: {

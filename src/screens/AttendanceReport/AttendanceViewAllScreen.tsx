@@ -126,7 +126,7 @@ const AttendanceViewAllScreen = ({ navigation }: any) => {
     const token = store.getState()?.auth?.token;
     try {
       const res = await fetch(
-        'https://ksb-pr.fieldkonnect.in/api/user-attendance-zone-branch',
+        'http://localhost:8000/api/user-attendance-zone-branch',
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -326,8 +326,8 @@ const AttendanceViewAllScreen = ({ navigation }: any) => {
   const fetchAttendanceWithFilters = async (customFilters: any, tab?: any) => {
     const token = store.getState()?.auth?.token;
     try {
-      // let url = 'https://ksb-pr.fieldkonnect.in/api/today-attendance-zone?user_id=1';
-      let url = 'https://ksb-pr.fieldkonnect.in/api/today-attendance-zone?designation=' + (tab || 'asr');
+      // let url = 'http://localhost:8000/api/today-attendance-zone?user_id=1';
+      let url = 'http://localhost:8000/api/today-attendance-zone?designation=' + (tab || 'asr');
 
       if (customFilters.branch) {
         url += `&branch=${encodeURIComponent(customFilters.branch)}`;
@@ -366,7 +366,7 @@ const AttendanceViewAllScreen = ({ navigation }: any) => {
   // const fetchAttendance = async () => {
   //   const token = store.getState()?.auth?.token;
   //   try {
-  //     let url = 'https://ksb-pr.fieldkonnect.in/api/today-attendance-zone?designation=asr';
+  //     let url = 'http://localhost:8000/api/today-attendance-zone?designation=asr';
 
   //     // 👉 Append only if selected
   //     if (filters.branch) {

@@ -107,7 +107,7 @@ const OrderHistoryDetailsScreen = () => {
 
         try {
             const response = await fetch(
-                `https://ksb-pr.fieldkonnect.in/api/getOrderDetails?order_id=${orderId}`,
+                `http://localhost:8000/api/getOrderDetails?order_id=${orderId}`,
                 {
                     method: 'GET',
                     headers: {

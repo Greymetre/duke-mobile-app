@@ -133,7 +133,7 @@ const VisitReport: React.FC<VisitReportProps> = ({ navigation, route }) => {
         setVisitTypesLoading(true);
         setVisitTypesError(false);
         const token = store.getState().auth?.token;
-        const response = await axios.get('https://ksb-pr.fieldkonnect.in/api/getVisitTypes', {
+        const response = await axios.get('http://localhost:8000/api/getVisitTypes', {
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',

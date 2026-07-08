@@ -1,13 +1,14 @@
 import axios from "axios";
 import store from "../components/redux/Store";
-export const BASE_URL = "https://ksb-pr.fieldkonnect.in/";
+import { attachAxiosLogging } from "./ApiLogger";
+export const BASE_URL = "https://duke.fieldkonnect.in/";
 // export const BASE_URL = 'http://192.168.1.4:8000/';
 
 const axiosClientForm = axios.create({ baseURL: BASE_URL });
+attachAxiosLogging(axiosClientForm, "axiosForm");
 
 axiosClientForm.interceptors.request.use(async (config) => {
   const token = store.getState().auth?.token;
-  console.log(token)
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }

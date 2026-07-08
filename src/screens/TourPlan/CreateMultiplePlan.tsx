@@ -101,7 +101,7 @@ const AddTourPlan = ({ navigation }) => {
       if (!token) return;
 
       try {
-        const res = await fetch('https://ksb-pr.fieldkonnect.in/api/tour/userlist', {
+        const res = await fetch('http://localhost:8000/api/tour/userlist', {
           method: 'GET',
           headers: {
             Accept: 'application/json',

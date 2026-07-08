@@ -97,7 +97,7 @@ const CustomerList = ({ route }: any) => {
       const token = store.getState()?.auth?.token;
 
       const res = await axios.get(
-        'https://ksb-pr.fieldkonnect.in/api/getMyHierarchyUsers', // ← your endpoint 
+        'http://localhost:8000/api/getMyHierarchyUsers', // ← your endpoint 
         {
           headers: { Authorization: `Bearer ${token}` },
           params: { type: route.params.type }, // optional, if backend needs it
@@ -135,7 +135,7 @@ const CustomerList = ({ route }: any) => {
     try {
       const token = store.getState()?.auth?.token;
 
-      const res = await axios.get('https://ksb-pr.fieldkonnect.in/api/getPunchin', {
+      const res = await axios.get('http://localhost:8000/api/getPunchin', {
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: 'application/json',
@@ -188,7 +188,7 @@ const CustomerList = ({ route }: any) => {
       const token = store.getState()?.auth?.token;
 
       const res = await axios.get(
-        'https://ksb-pr.fieldkonnect.in/api/secondary-customer/cities',
+        'http://localhost:8000/api/secondary-customer/cities',
         {
           headers: { Authorization: `Bearer ${token}` },
         }
@@ -206,7 +206,7 @@ const CustomerList = ({ route }: any) => {
       const token = store.getState()?.auth?.token;
 
       const res = await axios.get(
-        'https://ksb-pr.fieldkonnect.in/api/getCurrentOpenCheckin',
+        'http://localhost:8000/api/getCurrentOpenCheckin',
         {
           headers: { Authorization: `Bearer ${token}` },
         }

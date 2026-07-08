@@ -3,11 +3,13 @@ import Toast from 'react-native-toast-message';
 import store from '../components/redux/Store';
 import { logout, setToken, setUser } from '../components/redux/slice/AuthSlice';
 import { navigationRef } from '../services/NavigationService';
-export const BASE_URL = 'https://ksb-pr.fieldkonnect.in/';
+import { attachAxiosLogging } from './ApiLogger';
+export const BASE_URL = 'https://duke.fieldkonnect.in/';
 export const IMAGE_BASE_URL = 'https://fieldkonnect.in/ksb-pr/';
 // export const BASE_URL = 'http://192.168.1.4:8000/';
 
 const axiosClient = axios.create({ baseURL: BASE_URL });
+attachAxiosLogging(axiosClient, 'axiosClient');
 
 axiosClient.interceptors.request.use(async config => {
   const token = store.getState()?.auth?.token;

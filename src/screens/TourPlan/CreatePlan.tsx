@@ -113,7 +113,7 @@ const CreatePlan: React.FC = ({ navigation, route }: any) => {
     if (!token) return;
 
     try {
-      const res = await fetch('https://ksb-pr.fieldkonnect.in/api/tour/userlist', {
+      const res = await fetch('http://localhost:8000/api/tour/userlist', {
         headers: { Authorization: `Bearer ${token}` },
       });
       const json = await res.json();
@@ -135,7 +135,7 @@ const CreatePlan: React.FC = ({ navigation, route }: any) => {
     if (!token) return;
 
     try {
-      const res = await fetch('https://ksb-pr.fieldkonnect.in/api/userDistrictList', {
+      const res = await fetch('http://localhost:8000/api/userDistrictList', {
         headers: { Authorization: `Bearer ${token}` },
       });
       const json = await res.json();
@@ -161,7 +161,7 @@ const CreatePlan: React.FC = ({ navigation, route }: any) => {
 
     try {
       const res = await fetch(
-        `https://ksb-pr.fieldkonnect.in/api/userCitiesByDistrict?district_id=${districtId}`,
+        `http://localhost:8000/api/userCitiesByDistrict?district_id=${districtId}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         }

@@ -20,7 +20,7 @@ interface BeatItem {
     is_today: boolean;
 }
 
-const API_BASE = 'https://ksb-pr.fieldkonnect.in/api';
+const API_BASE = 'http://localhost:8000/api';
 
 const BeatsScreen = () => {
     const navigation = useNavigation<NavigationProp<ParamListBase>>();
