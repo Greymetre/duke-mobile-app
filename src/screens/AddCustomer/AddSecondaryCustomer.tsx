@@ -1,0 +1,1201 @@
+
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  View,
+  TextInput,
+  TouchableOpacity,
+  Switch,
+  ScrollView,
+  Platform,
+  Pressable,
+  PermissionsAndroid,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+} from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
+import { rw } from '../../utils/responsive';
+import { colors } from '../../utils/Colors';
+import AppText from '../../components/AppText/AppText';
+import { MinusIcon, PlusIcon, UploadIcon } from '../../assets/svgs/HomePageSvgs';
+import { styles } from './styles'; // ← your styles file
+import { ArrowDownIcon } from '../../assets/svgs/SvgsFile';
+import { Dropdown, MultiSelect } from 'react-native-element-dropdown';
+// import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view'
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
+
+import {
+  useGetBeatList,
+  useGetCityListApi,
+  useGetDistributorsList,
+  useGetDistrictListApi,
+  useGetPincodeByCityListAPi,
+  useGetPincodeListAPi,
+  useGetStateListApi,
+} from '../../api/query/CustomerApi';
+import { Asset, ImagePickerResponse, launchCamera, launchImageLibrary } from 'react-native-image-picker';
+import FastImage from 'react-native-fast-image';
+import Toast from 'react-native-toast-message';
+import store from '../../components/redux/Store';
+import { BASE_URL, IMAGE_BASE_URL } from '../../api/AxiosClient';
+import ActionSheet, { ActionSheetRef } from 'react-native-actions-sheet';
+import useLocationHook from '../../api/hooks/uselocationhook';
+import { fonts } from '../../utils/typography';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import ImageCropPicker from 'react-native-image-crop-picker';
+import { useFocusEffect } from '@react-navigation/native';
+
+const requestPermissions = async () => {
+  if (Platform.OS !== 'android') return true;
+  try {
+    const granted = await PermissionsAndroid.requestMultiple([
+      PermissionsAndroid.PERMISSIONS.CAMERA,
+      PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+      PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+    ]);
+    return (
+      granted['android.permission.CAMERA'] === PermissionsAndroid.RESULTS.GRANTED &&
+      (granted['android.permission.READ_EXTERNAL_STORAGE'] === PermissionsAndroid.RESULTS.GRANTED ||
+        Platform.Version >= 33)
+    );
+  } catch (err) {
+    console.warn(err);
+    return false;
+  }
+};
+
+const AccordionSection = ({ title, children, defaultExpanded = false }: any) => {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  const heightValue = useSharedValue(defaultExpanded ? 1000 : 0);
+
+  const toggle = () => {
+    const toValue = expanded ? 0 : 1000;
+    heightValue.value = withTiming(toValue, {
+      duration: !expanded ? 300 : 0,
+      easing: Easing.inOut(Easing.ease),
+    });
+    setExpanded(!expanded);
+  };
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    maxHeight: heightValue.value,
+    overflow: 'hidden',
+  }));
+
+  return (
+    <View style={styles.sectionWrapper}>
+      {!expanded && (
+        <TouchableOpacity style={[styles.sectionHeader, { marginBottom: rw(20) }]} onPress={toggle}>
+          <AppText size={16} color={colors.black} family="InterSemiBold">
+            {title}
+          </AppText>
+          <PlusIcon />
+        </TouchableOpacity>
+      )}
+      <Animated.View style={animatedStyle}>
+        <View style={[styles.sectionContent, { paddingBottom: 20, marginBottom: rw(10) }]}>
+          <TouchableOpacity style={[styles.sectionHeader, { marginBottom: 12, marginTop: 4 }]} onPress={toggle}>
+            <AppText size={16} color={colors.black} family="InterSemiBold">
+              {title}
+            </AppText>
+            <MinusIcon />
+          </TouchableOpacity>
+          {children}
+        </View>
+      </Animated.View>
+    </View>
+  );
+};
+
+const CustomTextInput = ({ placeholder, value, onChangeText, keyboardType = 'default', maxLength, editable = true }: any) => (
+  <View style={[styles.selectUser, styles.row]}>
+    <TextInput
+      style={styles.textInput}
+      placeholder={placeholder}
+      placeholderTextColor={'#718096'}
+      value={value}
+      maxLength={maxLength}
+      onChangeText={onChangeText}
+      keyboardType={keyboardType}
+      autoCapitalize="sentences"
+      editable={editable}
+    />
+  </View>
+);
+
+const AddSecondaryCustomer = ({ navigation, route }: any) => {
+  const type = route?.params?.type || 'RETAILER';
+  const isEdit = !!route?.params?.customer;
+  const existingCustomer = route?.params?.customer;
+
+  const [formData, setFormData] = useState<any>({
+    type,
+    sub_type: '',
+    owner_name: '',
+    shop_name: '',
+    mobile_numbers: [] as string[],
+    address_line: '',
+    country_id: '1',
+    state_id: '',
+    district_id: '',
+    city_id: '',
+    pincode_id: '',
+    distributor_name: '', // comma separated
+    agri_distributor: '', // comma separated
+    sales_exception_assignment: '',
+    vehicle_segment: '',
+    belt_area_market_name: '',
+    saathi_awareness_status: '',
+    beat_id: '',
+    gps_location: '',
+    shop_photo: null,
+    gst_attachment: null,
+    pan_attachment: null,
+    bank_proof: null,
+    gst_number: '',
+    pan_number: '',
+    bank_account_type: '',
+    bank_account_number: '',
+    bank_account_number_confirm: '',
+    bank_name: '',
+    ifsc_code: '',
+    account_holder_name: '',
+  });
+
+  const [mobileInput, setMobileInput] = useState('');
+  const [pinCode, setPincode] = useState('');
+  const [stateName, setStateName] = useState('');
+  const [districtName, setDistrictName] = useState('');
+  const [cityName, setCityName] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [bankNumberError, setBankNumberError] = useState<string | null>(null);
+  const { mutateAsync: getBeatList } = useGetBeatList();
+  const { mutateAsync: getDistrubtorList } = useGetDistributorsList();
+  const { mutateAsync: getPincodes } = useGetPincodeListAPi();
+  const { mutateAsync: getPincodesByCity } = useGetPincodeByCityListAPi();
+
+  const actionSheetRef = useRef<ActionSheetRef>(null);
+  const [currentUploadField, setCurrentUploadField] = useState<string | null>(null);
+  const [currentUploadLabel, setCurrentUploadLabel] = useState<string>('Upload Image');
+
+  const [beats, setBeats] = useState([]);
+  const [distributorName, setDistributorName] = useState([]);
+
+  const { coords } = useLocationHook();
+  const [useCurrentLocation, setUseCurrentLocation] = useState(false);
+  const [distributors, setDistributors] = useState<any[]>([]);
+  const [cityOptions, setCityOptions] = useState<any[]>([]);
+  const [showCityDropdown, setShowCityDropdown] = useState(false);
+  useEffect(() => {
+    loadBeats();
+    loadDistributors();
+  }, []);
+
+  const loadBeats = async () => {
+    try {
+      const res = await getBeatList();
+      if (res?.data?.status === 'success') {
+        setBeats(res.data.data.map((beat: any) => ({
+          label: beat.beat_name,
+          value: beat.beat_id,
+        })));
+      }
+    } catch (error) {
+      console.log('Beat API error', error);
+    }
+  };
+
+  const loadDistributors = async () => {
+    try {
+      const res = await getDistrubtorList();
+      if (res?.data?.status) {
+        setDistributors(
+          res.data.data.map((d: any) => ({
+            label: `${d.distributor_code || ''} - ${d.legal_name || d.name || ''}`,
+            value: String(d.id),
+          })),
+        );
+      }
+    } catch (e) {
+      console.log('Distributors fetch error', e);
+    }
+  };
+
+  const loadDistributorAPI = async () => {
+    try {
+      const res = await getDistrubtorList();
+      if (res?.data?.status) {
+        setDistributorName(res.data.data.map((dist: any) => ({
+          label: `${dist.distributor_code} - ${dist.legal_name}`,
+          value: dist.id,
+        })));
+      }
+    } catch (error) {
+      console.log('Distributor API error', error);
+    }
+  };
+
+  const loadPincodesByCity = async (cityId: any) => {
+    try {
+      const res = await getPincodesByCity(cityId);
+      if (res?.data?.status === 'success') {
+        const pincodes = res?.data?.data || [];
+        if (existingCustomer?.pincode_id) {
+          const matchedPincode = pincodes.find(
+            (item: any) => item.pincode_id === existingCustomer.pincode_id
+          );
+          if (matchedPincode) {
+            setPincode(matchedPincode.pincode);
+            handleChange("pincode_id", matchedPincode.pincode_id);
+            loadPincodes(matchedPincode.pincode);
+          }
+        }
+      }
+    } catch (e) {
+      console.log("Pincode by city error", e);
+    }
+  };
+
+
+  // Validate on change (you can also validate on submit)
+  const handleBankNumberChange = (value: string) => {
+    handleChange('bank_account_number', value);
+
+    // Check match only if confirm field is already filled
+    if (formData.bank_account_number_confirm && value !== formData.bank_account_number_confirm) {
+      setBankNumberError("Account numbers don't match");
+    } else {
+      setBankNumberError(null);
+    }
+  };
+
+  const handleConfirmBankNumberChange = (value: string) => {
+    handleChange('bank_account_number_confirm', value);
+
+    if (formData.bank_account_number && value !== formData.bank_account_number) {
+      setBankNumberError("Account numbers don't match");
+    } else {
+      setBankNumberError(null);
+    }
+  };
+
+  // Optional: more strict validation before submit
+  const isBankInfoValid = () => {
+    const hasBankNumber = !!formData.bank_account_number?.trim();
+    const hasConfirm = !!formData.bank_account_number_confirm?.trim();
+
+    if (hasBankNumber && !hasConfirm) {
+      return false; // must confirm if entered
+    }
+
+    if (hasBankNumber && hasConfirm) {
+      return formData.bank_account_number === formData.bank_account_number_confirm;
+    }
+
+    return true; // no bank number → ok
+  };
+
+  // const loadPincodes = async (pincode: string) => {
+  //   if (pincode.length !== 6) return;
+
+  //   try {
+  //     const res = await getPincodes(pincode);
+  //     const data = res?.data;
+
+  //     if (res?.status === 200 && data?.pincode) {
+  //       setStateName(data.state);
+  //       setDistrictName(data.district);
+  //       setCityName(data.city);
+
+  //       handleChange("state_id", data.state_id);
+  //       handleChange("pincode_id", data.pincode_id);
+  //       handleChange("district_id", data.district_id);
+  //       handleChange("city_id", data.city_id);
+  //     } else {
+  //       Toast.show({ type: "error", text1: "Invalid Pincode" });
+  //       clearLocationFields();
+  //     }
+  //   } catch (error) {
+  //     Toast.show({ type: "error", text1: "Invalid Pincode" });
+  //     clearLocationFields();
+  //     console.log("Pincode error", error);
+  //   }
+  // };
+
+  const loadPincodes = async (pincode: string, olddata?: any) => {
+    if (pincode.length !== 6) return;
+
+    try {
+      const res = await getPincodes(pincode);
+      const data = res?.data;
+
+      if (res?.status === 200 && data?.pincode) {
+        setStateName(data.state);
+        setDistrictName(data.district);
+
+        handleChange("state_id", data.state_id);
+        handleChange("pincode_id", data.pincode_id);
+        handleChange("district_id", data.district_id);
+
+        // ✅ NEW LOGIC
+        if (data?.cities && data.cities.length > 1) {
+          // Multiple cities case
+          setShowCityDropdown(true);
+
+          const options = data.full_data.map((c: any, index: number) => ({
+            label: c?.city,
+            value: data.city_ids[index],
+            state: c?.state,
+            district: c?.district,
+            state_id: c?.state_id,
+            district_id: c?.district_id
+          }));
+
+          setCityOptions(options);
+
+          // clear previous selection
+          setCityName('');
+          handleChange("city_id", '');
+          if (olddata?.city_id) {
+            const matchedCity = options.find(
+              (item: any) => String(item.value) === String(olddata.city_id)
+            );
+
+            if (matchedCity) {
+              setCityName(matchedCity.label);
+
+              handleChange("city_id", matchedCity.value);
+              handleChange("state_id", matchedCity.state_id);
+              handleChange("district_id", matchedCity.district_id);
+
+              setStateName(matchedCity.state);
+              setDistrictName(matchedCity.district);
+            }
+          }
+        } else {
+          // Single city case (existing behavior)
+          setShowCityDropdown(false);
+
+          setCityName(data.city);
+          handleChange("city_id", data.city_id);
+        }
+
+      } else {
+        Toast.show({ type: "error", text1: "Invalid Pincode" });
+        clearLocationFields();
+      }
+    } catch (error) {
+      Toast.show({ type: "error", text1: "Invalid Pincode" });
+      clearLocationFields();
+      console.log("Pincode error", error);
+    }
+  };
+
+  const clearLocationFields = () => {
+    setStateName('');
+    setDistrictName('');
+    setCityName('');
+    handleChange("state_id", '');
+    handleChange("district_id", '');
+    handleChange("city_id", '');
+    handleChange("pincode_id", '');
+    setShowCityDropdown(false);
+    setCityOptions([]);
+  };
+
+  useEffect(() => {
+    if (useCurrentLocation && coords) {
+      const lat = Number(coords.latitude.toFixed(6));
+      const lng = Number(coords.longitude.toFixed(6));
+      handleChange("gps_location", `${lat},${lng}`);
+    } else if (!useCurrentLocation) {
+      handleChange("gps_location", "");
+    }
+  }, [useCurrentLocation, coords]);
+
+  const openUploadSheet = (field: string, label: string) => {
+    setCurrentUploadField(field);
+    setCurrentUploadLabel(label);
+    actionSheetRef.current?.show();
+  };
+
+  const pickImage = async (fromCamera = false) => {
+    const hasPermission = await requestPermissions();
+    if (!hasPermission) return;
+
+    const options = {
+      mediaType: 'photo' as const,
+      quality: 0.9,           // start with good quality
+      maxWidth: 1600,         // resize before cropping (helps performance)
+      maxHeight: 1600,
+      includeBase64: false,
+    };
+
+    const picker = fromCamera ? launchCamera : launchImageLibrary;
+    picker({ mediaType: 'photo', quality: 1 }, async (response: ImagePickerResponse) => {
+      // if (response.didCancel || response.errorCode) return;
+      // if (response.assets && response.assets[0] && currentUploadField) {
+      //   handleChange(currentUploadField, response.assets[0]);
+      // }
+      // actionSheetRef.current?.hide();
+      if (response.didCancel || response.errorCode || !response.assets?.[0]) {
+        actionSheetRef.current?.hide();
+        return;
+      }
+
+      const asset = response.assets[0];
+
+      try {
+        // Now open cropper with the picked image
+        const croppedImage = await ImageCropPicker.openCropper({
+          path: asset.uri!, // important: use uri from image-picker
+          width: 1200, // desired output width
+          height: 1200, // desired output height (change as needed)
+          cropping: true,
+          cropperCircleOverlay: false, // set true for profile picture (circular crop)
+          freeStyleCropEnabled: true, // allow user to freely adjust crop
+          compressImageQuality: 0.85, // final compression
+          compressImageMaxWidth: 1200,
+          compressImageMaxHeight: 1200,
+          forceJpg: true,
+          mediaType: 'photo'
+        });
+        // croppedImage now has much smaller size
+        if (currentUploadField) {
+          handleChange(currentUploadField, {
+            uri: croppedImage.path,
+            type: croppedImage.mime || 'image/jpeg',
+            fileName: croppedImage.filename || `photo_${Date.now()}.jpg`,
+            width: croppedImage.width,
+            height: croppedImage.height,
+            size: croppedImage.size,   // you can check this before upload
+          });
+        }
+      } catch (cropError: any) {
+        if (cropError.code !== 'E_PICKER_CANCELLED') {
+          console.error('Cropping error:', cropError);
+          // Optionally show alert to user
+        }
+      }
+
+      actionSheetRef.current?.hide();
+    });
+  };
+
+  const ImageUploadBox = ({ label, value, field, required = false, existingUri }: any) => {
+    const displayUri = value?.uri || existingUri;
+    return (
+      <View style={{ width: '48%', marginBottom: 16 }}>
+        <AppText size={14} color={colors.black} family="InterMedium">
+          {label} {required && <AppText color="red">*</AppText>}
+        </AppText>
+        <TouchableOpacity
+          style={{
+            height: 140,
+            justifyContent: value ? 'flex-start' : 'center',
+            alignItems: 'center',
+            borderWidth: 1.5,
+            borderColor: value ? '#22C55E' : '#CBD5E1',
+            borderStyle: 'dashed',
+            borderRadius: 12,
+            overflow: 'hidden',
+            marginTop: 8,
+          }}
+          onPress={() => openUploadSheet(field, label)}
+        >
+          {displayUri ? (
+            <>
+              <FastImage source={{ uri: displayUri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+              <TouchableOpacity
+                onPress={() => handleChange(field, null)}
+                style={{
+                  position: 'absolute',
+                  top: 8,
+                  right: 8,
+                  backgroundColor: 'rgba(0,0,0,0.6)',
+                  borderRadius: 20,
+                  padding: 6,
+                }}
+              >
+                <MinusIcon width={16} height={16} fill="white" />
+              </TouchableOpacity>
+            </>
+          ) : (
+            <View style={{ alignItems: 'center', gap: 8 }}>
+              <UploadIcon width={40} height={40} />
+              <AppText size={13} color="#64748B" family="InterMedium" align="center">
+                Tap to upload
+              </AppText>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
+  const getBasicCount = () => {
+    let count = 0;
+    if (formData.owner_name?.trim()) count++;
+    if (formData.shop_name?.trim()) count++;
+    if (formData.mobile_numbers.length > 0) count++;
+    return count;
+  };
+
+  const getAddressCount = () => {
+    let count = 0;
+    if (formData.address_line?.trim()) count++;
+    if (formData.state_id) count++;
+    if (formData.district_id) count++;
+    if (formData.city_id) count++;
+    if (pinCode.length === 6) count++;
+    return count;
+  };
+
+  const getAdditionalCount = () => {
+    let count = 0;
+    if (formData.distributor_name) count++;
+    if (formData.beat_id) count++;
+    return count;
+  };
+
+  const isFormValid =
+    getBasicCount() === 3 &&
+    getAddressCount() === 5 &&
+    getAdditionalCount() === 2 &&
+    isBankInfoValid();
+
+  const handleChange = (field: string, value: any) => {
+    setFormData((prev: any) => ({ ...prev, [field]: value }));
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      navigation.setOptions({
+        headerTitle: `${isEdit ? 'Edit Customer' : 'Add Customer'}`,     // ← change to whatever you want
+      });
+    }, [navigation, isEdit]
+    ));
+
+  const prepareFormData = () => {
+    const fd = new FormData();
+    fd.append('type', formData.type);
+    fd.append('sub_type', formData.sub_type || '');
+    fd.append('owner_name', formData.owner_name);
+    fd.append('shop_name', formData.shop_name);
+    fd.append('mobile_number', formData.mobile_numbers.join(','));
+    fd.append('address_line', formData.address_line);
+    fd.append('country_id', formData.country_id);
+    fd.append('state_id', formData.state_id);
+    fd.append('district_id', formData.district_id);
+    fd.append('city_id', formData.city_id);
+    fd.append('pincode_id', formData.pincode_id);
+    fd.append('distributor_name', formData.distributor_name);
+    fd.append('agri_distributor', formData.agri_distributor);
+    fd.append('beat_id', formData.beat_id);
+    fd.append('belt_area_market_name', formData.belt_area_market_name || '');
+    fd.append('gps_location', formData.gps_location || '');
+
+    if (formData.type === 'RETAILER') {
+      fd.append('gst_number', formData.gst_number || '');
+      fd.append('pan_number', formData.pan_number || '');
+      fd.append('bank_account_type', formData.bank_account_type || '');
+      fd.append('bank_account_number', formData.bank_account_number || '');
+      fd.append('bank_name', formData.bank_name || '');
+      fd.append('ifsc_code', formData.ifsc_code || '');
+      fd.append('account_holder_name', formData.account_holder_name || '');
+    }
+
+    if (formData.type === 'MECHANIC' || formData.type === 'GARAGE') {
+      fd.append('saathi_awareness_status', formData.saathi_awareness_status || '');
+    }
+
+    const addPhoto = (key: string, asset: any) => {
+      if (asset?.uri) {
+        fd.append(key, {
+          uri: asset.uri,
+          name: asset.fileName || `photo_${Date.now()}.jpg`,
+          type: asset.type || 'image/jpeg',
+        });
+      }
+    };
+
+    addPhoto('shop_photo', formData.shop_photo);
+    addPhoto('gst_attachment', formData.gst_attachment);
+    addPhoto('pan_attachment', formData.pan_attachment);
+    addPhoto('bank_proof', formData.bank_proof);
+
+    return fd;
+  };
+
+  const handleSubmit = async () => {
+    if (!isFormValid) {
+      Toast.show({ type: 'error', text1: 'Please fill all required fields' });
+      return;
+    }
+    setLoading(true);
+
+    const token = store.getState().auth?.token;
+    const url = isEdit
+      ? `${BASE_URL}api/secondary-customers/${existingCustomer?.id}`
+      : `${BASE_URL}api/secondary-customers`;
+    // const payload1 = prepareFormData();
+    // console.log(payload1, 'poadkkfjakjsdhfkjas')
+    // return
+    try {
+      const payload = prepareFormData();
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: payload,
+      });
+
+      const json = await res.json();
+      if (res.ok) {
+        Toast.show({
+          type: 'success',
+          text1: isEdit ? 'Customer updated successfully' : 'Customer added successfully',
+        });
+        navigation.goBack();
+      } else {
+        Toast.show({ type: 'error', text1: json.message || 'Failed to save' });
+      }
+    } catch (err) {
+      Toast.show({ type: 'error', text1: 'Network error' });
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addMobileNumber = () => {
+    if (!mobileInput.trim() || mobileInput.length !== 10) {
+      Toast.show({ type: 'error', text1: 'Enter valid 10-digit number' });
+      return;
+    }
+    if (formData.mobile_numbers.length >= 5) {
+      Toast.show({ type: 'error', text1: 'Maximum 5 numbers allowed' });
+      return;
+    }
+    if (formData.mobile_numbers.includes(mobileInput)) {
+      Toast.show({ type: 'error', text1: 'Number already added' });
+      return;
+    }
+    handleChange('mobile_numbers', [...formData.mobile_numbers, mobileInput]);
+    setMobileInput('');
+  };
+
+  const removeMobile = (num: string) => {
+    handleChange('mobile_numbers', formData.mobile_numbers.filter((n: string) => n !== num));
+  };
+
+  useEffect(() => {
+    if (isEdit && existingCustomer) {
+      const mobiles = existingCustomer.mobile_number
+        ? existingCustomer.mobile_number.split(',').map((n: string) => n.trim())
+        : [];
+      console.log(existingCustomer.beat_id, 'existingCustomer.beat_id', existingCustomer)
+      setFormData({
+        type: existingCustomer.type || type,
+        sub_type: existingCustomer.sub_type || '',
+        owner_name: existingCustomer.owner_name || '',
+        shop_name: existingCustomer.shop_name || '',
+        mobile_numbers: mobiles,
+        address_line: existingCustomer.address_line || '',
+        country_id: existingCustomer.country_id || '1',
+        state_id: existingCustomer.state_id || '',
+        district_id: existingCustomer.district_id || '',
+        city_id: existingCustomer.city_id || '',
+        pincode_id: existingCustomer.pincode_id || '',
+        distributor_name: existingCustomer.distributor_name || '',
+        agri_distributor: existingCustomer.agri_distributor || '',
+        beat_id: existingCustomer.beat_id,
+        belt_area_market_name: existingCustomer.belt_area_market_name || '',
+        saathi_awareness_status: existingCustomer.saathi_awareness_status || '',
+        shop_photo: existingCustomer.shop_photo ? { uri: `${IMAGE_BASE_URL}public/storage/${existingCustomer.shop_photo}` } : null,
+        gst_number: existingCustomer.gst_number || '',
+        gps_location: existingCustomer.gps_location || '',
+        gst_attachment: existingCustomer.gst_attachment ? { uri: `${IMAGE_BASE_URL}public/storage/${existingCustomer.gst_attachment}` } : null,
+        pan_attachment: existingCustomer.pan_attachment ? { uri: `${IMAGE_BASE_URL}public/storage/${existingCustomer.pan_attachment}` } : null,
+        bank_proof: existingCustomer.bank_proof ? { uri: `${IMAGE_BASE_URL}public/storage/${existingCustomer.bank_proof}` } : null,
+        pan_number: existingCustomer.pan_number || '',
+        bank_account_type: existingCustomer.bank_account_type || '',
+        bank_account_number: existingCustomer.bank_account_number || '',
+        bank_account_number_confirm: existingCustomer.bank_account_number || '',
+        bank_name: existingCustomer.bank_name || '',
+        ifsc_code: existingCustomer.ifsc_code || '',
+        account_holder_name: existingCustomer.account_holder_name || '',
+      });
+      if (existingCustomer.pincode?.pincode) {
+        setPincode(existingCustomer.pincode?.pincode || '');
+      } else {
+        setPincode(existingCustomer.pincode || '');
+      }
+      if (existingCustomer.pincode?.pincode) {
+        loadPincodes(existingCustomer.pincode?.pincode, existingCustomer);
+      } else {
+        if (existingCustomer.city_id) {
+          loadPincodesByCity(existingCustomer.city_id);
+        } else if (existingCustomer.pincode) {
+          loadPincodes(existingCustomer.pincode);
+        }
+      }
+
+    }
+  }, [isEdit, existingCustomer, beats]);
+
+
+  const getFirstMissingFieldMessage = () => {
+    // Basic
+    if (!formData.shop_name?.trim()) return "Shop Name is required";
+    if (!formData.owner_name?.trim()) return "Owner Name is required";
+    if (formData.mobile_numbers.length === 0) return "At least one Mobile Number is required";
+
+    // Address
+    if (!formData.address_line?.trim()) return "Address is required";
+    if (!pinCode || pinCode.length !== 6) return "Pincode is required";
+    if (!formData.state_id) return "State is required";
+    if (!formData.district_id) return "District is required";
+    if (!formData.city_id) return "City is required";
+
+    // Additional
+    if (!formData.distributor_name) return "Distributor is required";
+    if (!formData.beat_id) return "Beat is required";
+
+    // Bank validation
+    if (!isBankInfoValid()) return "Bank account numbers do not match";
+
+    return "";
+  };
+
+  const missingFieldsMessage = getFirstMissingFieldMessage();
+  return (
+    <SafeAreaView style={[styles.container, { paddingBottom: 10 }]} edges={['bottom']}>
+      <View style={{ flex: 1, backgroundColor: '#fff' }}>
+        <View style={{ backgroundColor: '#E0F2FE', padding: 16, alignItems: 'center' }}>
+          <AppText size={16} family="InterSemiBold" color={colors.blue}>
+            Type: {type}
+          </AppText>
+        </View>
+        <KeyboardAwareScrollView
+          style={{ flex: 1, paddingHorizontal: 16 }}
+          bottomOffset={50}
+        // contentContainerStyle={{ padding: 16 }}
+
+
+        >
+          <View style={{ flex: 1 }}
+          >
+
+            <AccordionSection title="Basic Information" defaultExpanded>
+              <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                <AppText
+                  size={16}
+                  color={getBasicCount() == 3 ? '#22C55E' : '#64748B'}
+                  family="InterSemiBold"
+                >
+                  {getBasicCount()}/3 completed
+                </AppText>
+              </View>
+
+              <CustomTextInput
+                placeholder="Shop Name *"
+                value={formData.shop_name}
+                onChangeText={(v: string) => handleChange('shop_name', v)}
+              />
+
+              <CustomTextInput
+                placeholder="Owner Name *"
+                value={formData.owner_name}
+                onChangeText={(v: string) => handleChange('owner_name', v)}
+              />
+
+              <View style={{ marginTop: 8 }}>
+                <AppText size={14} family="InterMedium">
+                  Mobile Numbers (max 5) *
+                </AppText>
+                <AppText
+                  size={12}
+                  color="#64748B"
+                  family="InterRegular"
+                  style={{ marginTop: 4, marginBottom: 8 }}
+                >
+                  • First number will be considered **Primary Mobile {'\n'}   Number** (also used for WhatsApp){'\n'}
+                  • Other numbers are secondary / alternate contact numbers
+                </AppText>
+                <View style={[styles.selectUser, { flexDirection: 'row', marginTop: 8, alignItems: 'center' }]}>
+                  <TextInput
+                    style={[styles.textInput, { flex: 1 }]}
+                    placeholder="Enter 10-digit number"
+                    value={mobileInput}
+                    onChangeText={setMobileInput}
+                    keyboardType="phone-pad"
+                    maxLength={10}
+                  />
+                  <TouchableOpacity
+                    onPress={addMobileNumber}
+                    style={{
+                      backgroundColor: colors.blue,
+                      paddingHorizontal: 16,
+                      paddingVertical: 12,
+                      borderRadius: 8,
+                      marginLeft: 12,
+                    }}
+                  >
+                    <AppText color="white" family="InterMedium">
+                      Add
+                    </AppText>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+                  {formData.mobile_numbers.map((num: string) => (
+                    <View
+                      key={num}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        backgroundColor: '#e2e8f0',
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderRadius: 20,
+                      }}
+                    >
+                      <AppText size={14}>{num}</AppText>
+                      <TouchableOpacity onPress={() => removeMobile(num)} style={{ marginLeft: 8 }}>
+                        <MinusIcon width={16} height={16} fill="#ef4444" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </AccordionSection>
+
+            <AccordionSection title="Address Information">
+              <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                <AppText
+                  size={16}
+                  color={getAddressCount() === 5 ? '#22C55E' : '#64748B'}
+                  family="InterSemiBold"
+                >
+                  {getAddressCount()}/5 completed
+                </AppText>
+              </View>
+              <CustomTextInput
+                placeholder="Address Line *"
+                value={formData.address_line}
+                onChangeText={(v: string) => handleChange('address_line', v)}
+              />
+
+              <View style={[styles.selectUser, { padding: 14, marginBottom: 12 }]}>
+                <AppText size={14} color={colors.black}>India</AppText>
+              </View>
+              {console.log(pinCode, 'pinCodepinCodepinCode')}
+              <CustomTextInput
+                placeholder="Pincode *"
+                value={pinCode}
+                maxLength={6}
+                keyboardType="numeric"
+                onChangeText={(text: string) => {
+                  setPincode(text);
+                  if (text.length === 6) {
+                    loadPincodes(text);
+                  } else {
+                    clearLocationFields();
+                  }
+                }}
+              />
+
+              <CustomTextInput placeholder="State *" value={stateName} editable={false} />
+              <CustomTextInput placeholder="District *" value={districtName} editable={false} />
+              {/* <CustomTextInput placeholder="City *" value={cityName} editable={false} /> */}
+              {showCityDropdown ? (
+                <Dropdown
+                  style={[styles.selectUser, { padding: 14, marginBottom: 12 }]}
+                  data={cityOptions}
+                  value={formData.city_id}
+                  onChange={(item) => {
+                    handleChange("city_id", item.value);
+                    setCityName(item.label);
+                    setDistrictName(item?.district)
+                    setStateName(item?.state)
+                    handleChange("state_id", item.state_id);
+                    handleChange("district_id", item.district_id);
+                  }}
+                  labelField="label"
+                  valueField="value"
+                  placeholder="Select City *"
+                  placeholderStyle={{ color: 'gray', fontFamily: fonts.InterRegular, fontSize: 14 }}
+                  renderRightIcon={() => <ArrowDownIcon />}
+                />
+              ) : (
+                <CustomTextInput placeholder="City *" value={cityName} editable={false} />
+              )}
+            </AccordionSection>
+
+            <AccordionSection title="Additional Information">
+              <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                <AppText
+                  size={16}
+                  color={getAdditionalCount() === 2 ? '#22C55E' : '#64748B'}
+                  family="InterSemiBold"
+                >
+                  {getAdditionalCount()}/2 completed
+                </AppText>
+              </View>
+              <CustomTextInput
+                placeholder="Belt / Area / Market Name (optional)"
+                value={formData.belt_area_market_name}
+                onChangeText={(v: string) => handleChange('belt_area_market_name', v)}
+              />
+
+              <Dropdown
+                style={[styles.selectUser, { padding: 14, marginTop: 12 }]}
+                data={distributors}
+                value={formData.distributor_name}
+                onChange={(item) => handleChange('distributor_name', item.value)}
+                labelField="label"
+                valueField="value"
+                placeholder="Select Domestic Distributor *"
+                placeholderStyle={{ color: 'gray', fontFamily: fonts.InterRegular, fontSize: 14 }}
+                search
+                renderRightIcon={() => <ArrowDownIcon />}
+              />
+
+              <Dropdown
+                style={[styles.selectUser, { padding: 14, marginTop: 12 }]}
+                data={distributors} // ← using same list; change if different API
+                value={formData.agri_distributor}
+                onChange={(item) => handleChange('agri_distributor', item.value)}
+                labelField="label"
+                valueField="value"
+                placeholder="Select Agri Distributor (optional)"
+                placeholderStyle={{ color: 'gray', fontFamily: fonts.InterRegular, fontSize: 14 }}
+                search
+                renderRightIcon={() => <ArrowDownIcon />}
+              />
+
+              <Dropdown
+                style={[styles.selectUser, { padding: 14, marginTop: 12 }]}
+                data={beats}
+                value={formData.beat_id}
+                onChange={(item) => handleChange('beat_id', item.value)}
+                labelField="label"
+                valueField="value"
+                placeholder="Select Beat *"
+                placeholderStyle={{ color: 'gray', fontFamily: fonts.InterRegular, fontSize: 14 }}
+                renderRightIcon={() => <ArrowDownIcon />}
+              />
+
+              <CustomTextInput
+                placeholder="GPS Location (lat,lng) - optional"
+                value={formData.gps_location}
+                editable={false}
+              />
+
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginTop: 10,
+                  padding: 12,
+                  backgroundColor: '#f8fafc',
+                  borderRadius: 12,
+                  marginBottom: 10,
+                }}
+              >
+                <AppText size={14} family="InterMedium" width="70%">
+                  Use current location (auto-fill GPS)
+                </AppText>
+                <Switch
+                  value={useCurrentLocation}
+                  onValueChange={setUseCurrentLocation}
+                  trackColor={{ false: '#cbd5e1', true: colors.blue }}
+                />
+              </View>
+            </AccordionSection>
+
+            <AccordionSection title="Bank & Tax Information">
+              <CustomTextInput
+                placeholder="GST Number (optional)"
+                value={formData.gst_number}
+                onChangeText={(v: string) => handleChange('gst_number', v.toUpperCase())}
+                maxLength={15}
+              />
+              <CustomTextInput
+                placeholder="PAN Number (optional)"
+                value={formData.pan_number}
+                onChangeText={(v: string) => handleChange('pan_number', v.toUpperCase())}
+                maxLength={10}
+              />
+              <CustomTextInput
+                placeholder="Account Holder Name (optional)"
+                value={formData.account_holder_name}
+                onChangeText={(v: string) => handleChange('account_holder_name', v)}
+              />
+              <CustomTextInput
+                placeholder="Bank Account Number (optional)"
+                value={formData.bank_account_number}
+                onChangeText={handleBankNumberChange}
+                keyboardType="numeric"
+              />
+
+              {bankNumberError && (
+                <AppText
+                  size={13}
+                  color="red"
+                  style={{ marginTop: 4, marginLeft: 12 }}
+                >
+                  {bankNumberError}
+                </AppText>
+              )}
+
+              <CustomTextInput
+                placeholder="Confirm Bank Account Number"
+                value={formData.bank_account_number_confirm}
+                onChangeText={handleConfirmBankNumberChange}
+                keyboardType="numeric"
+              />
+              <CustomTextInput
+                placeholder="Bank Name (optional)"
+                value={formData.bank_name}
+                onChangeText={(v: string) => handleChange('bank_name', v)}
+              />
+              <CustomTextInput
+                placeholder="IFSC Code (optional)"
+                value={formData.ifsc_code}
+                onChangeText={(v: string) => handleChange('ifsc_code', v.toUpperCase())}
+                maxLength={14}
+              />
+              <Dropdown
+                style={[styles.selectUser, { padding: 14, marginTop: 12 }]}
+                data={[
+                  { label: 'Savings', value: 'SAVINGS' },
+                  { label: 'Current', value: 'CURRENT' },
+                ]}
+                value={formData.bank_account_type}
+                onChange={(item) => handleChange('bank_account_type', item.value)}
+                labelField="label"
+                valueField="value"
+                placeholder="Account Type (optional)"
+                placeholderStyle={{ color: 'gray', fontFamily: fonts.InterRegular, fontSize: 14 }}
+                renderRightIcon={() => <ArrowDownIcon />}
+              />
+            </AccordionSection>
+
+            <AccordionSection title="Attachments">
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                <ImageUploadBox
+                  label={`Shop Photo ${"\n"}(optional)`}
+                  field="shop_photo"
+                  value={formData.shop_photo}
+                  // required
+                  existingUri={isEdit ? formData.shop_photo?.uri : null}
+                />
+                <ImageUploadBox
+                  label="GST Attachment (optional)"
+                  field="gst_attachment"
+                  value={formData.gst_attachment}
+                  existingUri={isEdit ? formData.gst_attachment?.uri : null}
+                />
+                <ImageUploadBox
+                  label="PAN Attachment (optional)"
+                  field="pan_attachment"
+                  value={formData.pan_attachment}
+                  existingUri={isEdit ? formData.pan_attachment?.uri : null}
+                />
+                <ImageUploadBox
+                  label="Bank Proof / Cheque (optional)"
+                  field="bank_proof"
+                  value={formData.bank_proof}
+                  existingUri={isEdit ? formData.bank_proof?.uri : null}
+                />
+              </View>
+            </AccordionSection>
+
+            {missingFieldsMessage ? (
+              <AppText
+                size={13}
+                color="red"
+                align='center'
+                family='InterMedium'
+              >
+                {missingFieldsMessage}
+              </AppText>
+            ) : null}
+
+            <Pressable
+              style={{
+                backgroundColor: isFormValid ? colors.blue : '#94a3b8',
+                padding: 16,
+                borderRadius: 12,
+                alignItems: 'center',
+                marginTop: 16,
+              }}
+              disabled={!isFormValid || loading}
+              onPress={handleSubmit}
+            >
+              {loading ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <AppText color="white" size={16} family="InterBold">
+                  SUBMIT
+                </AppText>
+              )}
+            </Pressable>
+          </View>
+        </KeyboardAwareScrollView>
+        <ActionSheet
+          ref={actionSheetRef}
+          gestureEnabled
+          containerStyle={{ borderTopLeftRadius: 24, borderTopRightRadius: 24 }}
+        >
+          <View style={{ padding: 24 }}>
+            <AppText size={20} family="InterBold" align="center">
+              {currentUploadLabel}
+            </AppText>
+
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 32, gap: 16 }}>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  backgroundColor: colors.blue,
+                  padding: 16,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                }}
+                onPress={() => pickImage(true)}
+              >
+                <AppText color="white">Take Photo</AppText>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  backgroundColor: 'white',
+                  borderWidth: 1.5,
+                  borderColor: colors.blue,
+                  padding: 16,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                }}
+                onPress={() => pickImage(false)}
+              >
+                <AppText color={colors.blue}>Choose from Gallery</AppText>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ActionSheet>
+      </View>
+    </SafeAreaView>
+  );
+};
+
+export default AddSecondaryCustomer;
