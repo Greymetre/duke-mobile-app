@@ -20,7 +20,7 @@ interface BeatItem {
     is_today: boolean;
 }
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = 'https://duke.fieldkonnect.in/api';
 
 const BeatsScreen = () => {
     const navigation = useNavigation<NavigationProp<ParamListBase>>();

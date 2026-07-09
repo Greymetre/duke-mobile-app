@@ -28,6 +28,7 @@ import { BASE_URL, IMAGE_BASE_URL } from '../../api/AxiosClient';
 import FastImage from 'react-native-fast-image';
 import Toast from 'react-native-toast-message';
 import { useGetSubmitCheckIN } from '../../api/query/CustomerApi';
+import { normalizeIndianMobileNumber } from '../../utils/phone';
 
 const { width } = Dimensions.get('window');
 
@@ -180,7 +181,7 @@ const CustomerCard: React.FC<SolarCardProps> = ({
       }
       navigation.navigate('VisitReport', {
         checkin_id: type ? type?.checkin_id : newCheckInData || item?.last_checkin_id,
-        entity_type: 'distributor',
+        entity_type: 'customer',
         entity_id: item?.id,
         customerData: item, // pass full customer data if needed in report
         latitude: currentLat,
@@ -190,7 +191,7 @@ const CustomerCard: React.FC<SolarCardProps> = ({
     } else {
       setCheckInLoading(true)
       const payload = {
-        entity_type: 'distributor',
+        entity_type: 'customer',
         entity_id: item?.id,
         checkin_latitude: currentLat,
         checkin_longitude: currentLng,
@@ -251,8 +252,8 @@ const CustomerCard: React.FC<SolarCardProps> = ({
     );
   };
 
-  const cleanPhone = phoneNumber ? phoneNumber.replace(/\D/g, '') : '';
-  const cleanWhatsApp = whatsappNumber ? whatsappNumber.replace(/\D/g, '') : '';
+  const cleanPhone = normalizeIndianMobileNumber(phoneNumber);
+  const cleanWhatsApp = normalizeIndianMobileNumber(whatsappNumber);
 
   // Final WhatsApp number: prefer whatsapp_number, fallback to mobile_number
   const finalWhatsAppNumber = cleanWhatsApp || cleanPhone;

@@ -39,6 +39,7 @@ import ActionSheet, { ActionSheetRef } from 'react-native-actions-sheet';
 import Geolocation from '@react-native-community/geolocation';
 import useLocationHook from '../../api/hooks/uselocationhook';
 import { useFocusEffect } from '@react-navigation/native';
+import { normalizeIndianMobileNumber } from '../../utils/phone';
 
 const { width } = Dimensions.get('window');
 
@@ -83,6 +84,24 @@ const requestPermissions = async () => {
     }
   }
   return true;
+};
+
+const logFormData = (label: string, formData: FormData) => {
+  const parts = (formData as any)?._parts || [];
+  console.log(`===== ${label} FormData START =====`);
+  parts.forEach(([key, value]: [string, any]) => {
+    if (value && typeof value === 'object' && value.uri) {
+      console.log(key, {
+        uri: value.uri,
+        name: value.name || value.fileName,
+        type: value.type,
+        size: value.size,
+      });
+    } else {
+      console.log(key, value);
+    }
+  });
+  console.log(`===== ${label} FormData END =====`);
 };
 
 
@@ -195,6 +214,8 @@ const CustomUploadBox = ({ label }: { label: string }) => (
 const AddCustomer = ({ navigation, route }: any) => {
   const isEditMode = !!route?.params?.customer;           // better
   const distributorId = isEditMode ? route.params.customer.id : null;
+  const customerTypeId = route?.params?.customerTypeId;
+  const customerTypeName = route?.params?.customerTypeName || route?.params?.customer?.customer_type || route?.params?.customer?.type || 'Distributor';
 
 
 
@@ -654,6 +675,7 @@ console.log(billingPincode,'sksk');
           handleChange("billingState", data.state_id);
           handleChange("billingDistrict", data.district_id);
           handleChange("billingCity", data.city_id);
+          handleChange("billingPincode", data.pincode_id);
 
           if (formData.sameAsBilling) {
             setShippingStateName(data.state);
@@ -664,7 +686,7 @@ console.log(billingPincode,'sksk');
             handleChange("shippingState", data.state_id);
             handleChange("shippingDistrict", data.district_id);
             handleChange("shippingCity", data.city_id);
-            handleChange("shippingPincode", pincode);
+            handleChange("shippingPincode", data.pincode_id);
           }
         }
 
@@ -677,6 +699,7 @@ console.log(billingPincode,'sksk');
           handleChange("shippingState", data.state_id);
           handleChange("shippingDistrict", data.district_id);
           handleChange("shippingCity", data.city_id);
+          handleChange("shippingPincode", data.pincode_id);
         }
 
       } else {
@@ -693,7 +716,7 @@ console.log(billingPincode,'sksk');
 
 
   const pickFromGallery = () => {
-    const options = {
+    const options: any = {
       mediaType: 'photo' as const,
       quality: 0.85,
       includeBase64: false, // set true only if you really need base64
@@ -702,8 +725,14 @@ console.log(billingPincode,'sksk');
     launchImageLibrary(options, (response) => {
       if (response.didCancel) {
         console.log('User cancelled image picker');
+        actionSheetRef.current?.hide();
       } else if (response.errorCode) {
         console.log('ImagePicker Error: ', response.errorMessage);
+        Toast.show({
+          type: 'error',
+          text1: response.errorMessage || 'Gallery error',
+        });
+        actionSheetRef.current?.hide();
       } else if (response.assets && response.assets.length > 0) {
         const asset = response.assets[0];
         if (currentUploadField) {
@@ -967,6 +996,59 @@ console.log(billingPincode,'sksk');
 
   const prepareApiPayload = () => {
     const payload = new FormData();
+    const appendIfPresent = (key: string, value: any) => {
+      if (value !== undefined && value !== null && String(value).trim() !== '') {
+        payload.append(key, String(value).trim());
+      }
+    };
+
+    const addFile = (key: string, asset: any) => {
+      if (asset && asset.uri && !asset.uri.startsWith('http')) {
+        const filename = asset.fileName || `file_${Date.now()}.${asset.type?.split('/')[1] || 'jpg'}`;
+        payload.append(key, {
+          uri: asset.uri,
+          name: filename,
+          type: asset.type || 'image/jpeg',
+        } as any);
+      }
+    };
+
+    if (!isEditMode) {
+      const [firstName, ...lastNameParts] = formData.primaryContactPerson.trim().split(/\s+/);
+
+      payload.append('mobile', normalizeIndianMobileNumber(formData.primaryMobile));
+      appendIfPresent('full_name', formData.primaryContactPerson);
+      appendIfPresent('first_name', firstName);
+      appendIfPresent('last_name', lastNameParts.join(' '));
+      appendIfPresent('name', formData.legalName || formData.tradeName);
+      appendIfPresent('email', formData.primaryEmail);
+      appendIfPresent('contact_number', formData.alternateMobile);
+      appendIfPresent('customer_code', formData.distributorCode);
+      appendIfPresent('customertype', customerTypeId);
+      appendIfPresent('firmtype', formData.businessRegistrationType || formData.distributorCategory);
+      appendIfPresent('address1', formData.billingAddressLine1);
+      appendIfPresent('country_id', formData.billingCountry === 'IN' ? '1' : formData.billingCountry);
+      appendIfPresent('state_id', formData.billingState);
+      appendIfPresent('district_id', formData.billingDistrict);
+      appendIfPresent('city_id', formData.billingCity);
+      appendIfPresent('pincode_id', formData.billingPincode);
+      appendIfPresent('zipcode', billingPincode);
+      appendIfPresent('beat_id', formData.beatRoute);
+      appendIfPresent('gstin_no', formData.gstNumber);
+      appendIfPresent('pan_no', formData.panNumber);
+      appendIfPresent('account_holder', formData.accountHolderName);
+      appendIfPresent('account_number', formData.accountNumber);
+      appendIfPresent('bank_name', formData.bankName);
+      appendIfPresent('ifsc_code', formData.ifscSwift);
+      appendIfPresent('grade', formData.customerSegment);
+      appendIfPresent('status_type', formData.businessStatus);
+
+      addFile('shopimage', formData.shopImage);
+      addFile('image', formData.profileImage);
+      addFile('other_image', formData.additionalDocument || formData.cancelledCheque || formData.mouDocument);
+
+      return payload;
+    }
 
     // Basic Information
     payload.append('legal_name', formData.legalName || '');
@@ -1068,8 +1150,8 @@ console.log(billingPincode,'sksk');
     payload.append('same_as_billing', formData.sameAsBilling ? '1' : '0');
 
     // Images / Files
-    const addFile = (key: string, asset: any) => {
-      if (asset && asset.uri) {
+    const addLegacyFile = (key: string, asset: any) => {
+      if (asset && asset.uri && !asset.uri.startsWith('http')) {
         const filename = asset.fileName || `file_${Date.now()}.${asset.type?.split('/')[1] || 'jpg'}`;
         payload.append(key, {
           uri: asset.uri,
@@ -1079,11 +1161,11 @@ console.log(billingPincode,'sksk');
       }
     };
 
-    addFile('shop_image', formData.shopImage);
-    addFile('profile_image', formData.profileImage);
-    addFile('cancelled_cheque', formData.cancelledCheque);
-    addFile('mou_file', formData.mouDocument);
-    addFile('documents[]', formData.additionalDocument);   // note the [] for array
+    addLegacyFile('shop_image', formData.shopImage);
+    addLegacyFile('profile_image', formData.profileImage);
+    addLegacyFile('cancelled_cheque', formData.cancelledCheque);
+    addLegacyFile('mou_file', formData.mouDocument);
+    addLegacyFile('documents[]', formData.additionalDocument);   // note the [] for array
 
     return payload;
   };
@@ -1102,22 +1184,23 @@ console.log(billingPincode,'sksk');
     const token = store.getState().auth?.token;
     const url = isEditMode
       ? `${BASE_URL}api/master-distributors/${distributorId}`
-      : `${BASE_URL}${API_ENDPOINT.MASTER_DISTRIBUTOR_POST}`;
+      : `${BASE_URL}${API_ENDPOINT.STORE_CUSTOMER}`;
     try {
       const formPayload = prepareApiPayload();
+      logFormData(isEditMode ? 'Update Customer' : 'Store Customer', formPayload);
 
       const response = await fetch(url, {
         method: 'POST',
         headers: {
           Accept: 'application/json',
           Authorization: `Bearer ${token}`,
-          "Content-Type": "multipart/form-data"
         },
         body: formPayload,
       });
 
       const result = await response.json();
-      if (response.ok) {
+      const isSuccess = response.ok && (result?.status === true || result?.status === 'success');
+      if (isSuccess) {
         Toast.show({
           type: 'success',
           text1: isEditMode ? 'Distributor updated successfully' : 'Distributor added successfully',
@@ -1126,8 +1209,9 @@ console.log(billingPincode,'sksk');
         navigation.goBack();
       } else {
         setServerErrors(result.errors);
+        const message = Array.isArray(result?.message) ? result.message.join(', ') : result?.message;
         Toast.show({
-          type: 'success', text1: `Error: ${result.message || 'Failed to add customer'}`
+          type: 'error', text1: message || 'Failed to add customer'
         })
         console.log('API Error:', result);
       }
@@ -1136,7 +1220,7 @@ console.log(billingPincode,'sksk');
       setSubmitLoading(false)
       console.error('Submit error:', error);
       Toast.show({
-        type: 'success', text1: `'Something went wrong. Please try again.'`
+        type: 'error', text1: 'Something went wrong. Please try again.'
       })
     }
   };
@@ -1309,6 +1393,12 @@ const [locationLoading, setLocationLoading] = useState(false);
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        <View style={{ backgroundColor: '#E0F2FE', padding: 16, alignItems: 'center', borderRadius: 8, marginBottom: 16 }}>
+          <AppText size={16} family="InterSemiBold" color={colors.blue}>
+            Customer Type: {customerTypeName}
+          </AppText>
+        </View>
+
         <AccordionSection title="Basic Information" defaultExpanded={true}>
           {/* Progress indicator */}
           <View style={{ alignItems: 'center', marginBottom: 16 }}>

@@ -31,17 +31,19 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import {
   useGetBeatList,
   useGetCityListApi,
-  useGetDistributorsList,
   useGetDistrictListApi,
   useGetPincodeByCityListAPi,
   useGetPincodeListAPi,
   useGetStateListApi,
+  useMutateCustomerTypeListApi,
 } from '../../api/query/CustomerApi';
 import { Asset, ImagePickerResponse, launchCamera, launchImageLibrary } from 'react-native-image-picker';
+import { normalizeIndianMobileNumber } from '../../utils/phone';
 import FastImage from 'react-native-fast-image';
 import Toast from 'react-native-toast-message';
 import store from '../../components/redux/Store';
 import { BASE_URL, IMAGE_BASE_URL } from '../../api/AxiosClient';
+import { API_ENDPOINT } from '../../api/ApiUrls';
 import ActionSheet, { ActionSheetRef } from 'react-native-actions-sheet';
 import useLocationHook from '../../api/hooks/uselocationhook';
 import { fonts } from '../../utils/typography';
@@ -66,6 +68,24 @@ const requestPermissions = async () => {
     console.warn(err);
     return false;
   }
+};
+
+const logFormData = (label: string, formData: FormData) => {
+  const parts = (formData as any)?._parts || [];
+  console.log(`===== ${label} FormData START =====`);
+  parts.forEach(([key, value]: [string, any]) => {
+    if (value && typeof value === 'object' && value.uri) {
+      console.log(key, {
+        uri: value.uri,
+        name: value.name || value.fileName,
+        type: value.type,
+        size: value.size,
+      });
+    } else {
+      console.log(key, value);
+    }
+  });
+  console.log(`===== ${label} FormData END =====`);
 };
 
 const AccordionSection = ({ title, children, defaultExpanded = false }: any) => {
@@ -129,6 +149,8 @@ const CustomTextInput = ({ placeholder, value, onChangeText, keyboardType = 'def
 
 const AddSecondaryCustomer = ({ navigation, route }: any) => {
   const type = route?.params?.type || 'RETAILER';
+  const customerTypeId = route?.params?.customerTypeId;
+  const customerTypeName = route?.params?.customerTypeName || type;
   const isEdit = !!route?.params?.customer;
   const existingCustomer = route?.params?.customer;
 
@@ -174,7 +196,7 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
   const [loading, setLoading] = useState(false);
   const [bankNumberError, setBankNumberError] = useState<string | null>(null);
   const { mutateAsync: getBeatList } = useGetBeatList();
-  const { mutateAsync: getDistrubtorList } = useGetDistributorsList();
+  const { mutateAsync: getCustomerTypeList } = useMutateCustomerTypeListApi();
   const { mutateAsync: getPincodes } = useGetPincodeListAPi();
   const { mutateAsync: getPincodesByCity } = useGetPincodeByCityListAPi();
 
@@ -183,7 +205,6 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
   const [currentUploadLabel, setCurrentUploadLabel] = useState<string>('Upload Image');
 
   const [beats, setBeats] = useState([]);
-  const [distributorName, setDistributorName] = useState([]);
 
   const { coords } = useLocationHook();
   const [useCurrentLocation, setUseCurrentLocation] = useState(false);
@@ -211,31 +232,26 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
 
   const loadDistributors = async () => {
     try {
-      const res = await getDistrubtorList();
+      const res = await getCustomerTypeList({
+        customer_type_id: 1,
+        page: 1,
+        pageSize: 100,
+      });
+
       if (res?.data?.status) {
+        const list = res?.data?.data?.data || [];
         setDistributors(
-          res.data.data.map((d: any) => ({
-            label: `${d.distributor_code || ''} - ${d.legal_name || d.name || ''}`,
-            value: String(d.id),
+          list.map((d: any) => ({
+            label: [
+              d.customer_code,
+              d.shop_name || d.name || d.legal_name || d.owner_name,
+            ].filter(Boolean).join(' - '),
+            value: String(d.customer_id || d.id),
           })),
         );
       }
     } catch (e) {
       console.log('Distributors fetch error', e);
-    }
-  };
-
-  const loadDistributorAPI = async () => {
-    try {
-      const res = await getDistrubtorList();
-      if (res?.data?.status) {
-        setDistributorName(res.data.data.map((dist: any) => ({
-          label: `${dist.distributor_code} - ${dist.legal_name}`,
-          value: dist.id,
-        })));
-      }
-    } catch (error) {
-      console.log('Distributor API error', error);
     }
   };
 
@@ -427,7 +443,7 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
     const hasPermission = await requestPermissions();
     if (!hasPermission) return;
 
-    const options = {
+    const options: any = {
       mediaType: 'photo' as const,
       quality: 0.9,           // start with good quality
       maxWidth: 1600,         // resize before cropping (helps performance)
@@ -436,7 +452,7 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
     };
 
     const picker = fromCamera ? launchCamera : launchImageLibrary;
-    picker({ mediaType: 'photo', quality: 1 }, async (response: ImagePickerResponse) => {
+    picker(options, async (response: ImagePickerResponse) => {
       // if (response.didCancel || response.errorCode) return;
       // if (response.assets && response.assets[0] && currentUploadField) {
       //   handleChange(currentUploadField, response.assets[0]);
@@ -448,6 +464,9 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
       }
 
       const asset = response.assets[0];
+      if (currentUploadField) {
+        handleChange(currentUploadField, asset);
+      }
 
       try {
         // Now open cropper with the picked image
@@ -478,7 +497,11 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
       } catch (cropError: any) {
         if (cropError.code !== 'E_PICKER_CANCELLED') {
           console.error('Cropping error:', cropError);
-          // Optionally show alert to user
+          Toast.show({
+            type: 'info',
+            text1: 'Image selected',
+            text2: 'Crop was skipped, original image will be used',
+          });
         }
       }
 
@@ -582,6 +605,62 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
 
   const prepareFormData = () => {
     const fd = new FormData();
+    const appendIfPresent = (key: string, value: any) => {
+      if (value !== undefined && value !== null && String(value).trim() !== '') {
+        fd.append(key, String(value).trim());
+      }
+    };
+    const addPhoto = (key: string, asset: any) => {
+      if (asset?.uri && !asset.uri.startsWith('http')) {
+        fd.append(key, {
+          uri: asset.uri,
+          name: asset.fileName || `photo_${Date.now()}.jpg`,
+          type: asset.type || 'image/jpeg',
+        });
+      }
+    };
+
+    if (!isEdit) {
+      const mobileNumbers = formData.mobile_numbers.map((num: string) => normalizeIndianMobileNumber(num)).filter(Boolean);
+      const [firstName, ...lastNameParts] = formData.owner_name.trim().split(/\s+/);
+      const parentIds = [formData.distributor_name, formData.agri_distributor].filter(Boolean).join(',');
+
+      fd.append('mobile', mobileNumbers[0] || '');
+      appendIfPresent('full_name', formData.owner_name);
+      appendIfPresent('first_name', firstName);
+      appendIfPresent('last_name', lastNameParts.join(' '));
+      appendIfPresent('name', formData.shop_name);
+      appendIfPresent('customertype', customerTypeId);
+      appendIfPresent('firmtype', formData.sub_type);
+      appendIfPresent('contact_number', mobileNumbers[1] || mobileNumbers[0]);
+      appendIfPresent('address1', formData.address_line);
+      appendIfPresent('country_id', formData.country_id);
+      appendIfPresent('state_id', formData.state_id);
+      appendIfPresent('district_id', formData.district_id);
+      appendIfPresent('city_id', formData.city_id);
+      appendIfPresent('pincode_id', formData.pincode_id);
+      appendIfPresent('zipcode', pinCode);
+      appendIfPresent('parent_id', parentIds);
+      appendIfPresent('beat_id', formData.beat_id);
+      appendIfPresent('locality', formData.belt_area_market_name);
+      appendIfPresent('latitude', useCurrentLocation ? coords?.latitude : '');
+      appendIfPresent('longitude', useCurrentLocation ? coords?.longitude : '');
+      appendIfPresent('gstin_no', formData.gst_number);
+      appendIfPresent('pan_no', formData.pan_number);
+      appendIfPresent('account_holder', formData.account_holder_name);
+      appendIfPresent('account_number', formData.bank_account_number);
+      appendIfPresent('bank_name', formData.bank_name);
+      appendIfPresent('ifsc_code', formData.ifsc_code);
+      appendIfPresent('status_type', formData.saathi_awareness_status);
+
+      addPhoto('shopimage', formData.shop_photo);
+      addPhoto('gstin_image', formData.gst_attachment);
+      addPhoto('pan_image', formData.pan_attachment);
+      addPhoto('other_image', formData.bank_proof);
+
+      return fd;
+    }
+
     fd.append('type', formData.type);
     fd.append('sub_type', formData.sub_type || '');
     fd.append('owner_name', formData.owner_name);
@@ -613,8 +692,8 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
       fd.append('saathi_awareness_status', formData.saathi_awareness_status || '');
     }
 
-    const addPhoto = (key: string, asset: any) => {
-      if (asset?.uri) {
+    const addLegacyPhoto = (key: string, asset: any) => {
+      if (asset?.uri && !asset.uri.startsWith('http')) {
         fd.append(key, {
           uri: asset.uri,
           name: asset.fileName || `photo_${Date.now()}.jpg`,
@@ -623,10 +702,10 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
       }
     };
 
-    addPhoto('shop_photo', formData.shop_photo);
-    addPhoto('gst_attachment', formData.gst_attachment);
-    addPhoto('pan_attachment', formData.pan_attachment);
-    addPhoto('bank_proof', formData.bank_proof);
+    addLegacyPhoto('shop_photo', formData.shop_photo);
+    addLegacyPhoto('gst_attachment', formData.gst_attachment);
+    addLegacyPhoto('pan_attachment', formData.pan_attachment);
+    addLegacyPhoto('bank_proof', formData.bank_proof);
 
     return fd;
   };
@@ -641,12 +720,13 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
     const token = store.getState().auth?.token;
     const url = isEdit
       ? `${BASE_URL}api/secondary-customers/${existingCustomer?.id}`
-      : `${BASE_URL}api/secondary-customers`;
+      : `${BASE_URL}${API_ENDPOINT.STORE_CUSTOMER}`;
     // const payload1 = prepareFormData();
     // console.log(payload1, 'poadkkfjakjsdhfkjas')
     // return
     try {
       const payload = prepareFormData();
+      logFormData(isEdit ? 'Update Secondary Customer' : 'Store Customer', payload);
       const res = await fetch(url, {
         method: 'POST',
         headers: {
@@ -657,14 +737,16 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
       });
 
       const json = await res.json();
-      if (res.ok) {
+      const isSuccess = res.ok && (json?.status === true || json?.status === 'success');
+      if (isSuccess) {
         Toast.show({
           type: 'success',
           text1: isEdit ? 'Customer updated successfully' : 'Customer added successfully',
         });
         navigation.goBack();
       } else {
-        Toast.show({ type: 'error', text1: json.message || 'Failed to save' });
+        const message = Array.isArray(json?.message) ? json.message.join(', ') : json?.message;
+        Toast.show({ type: 'error', text1: message || 'Failed to save' });
       }
     } catch (err) {
       Toast.show({ type: 'error', text1: 'Network error' });
@@ -698,7 +780,10 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
   useEffect(() => {
     if (isEdit && existingCustomer) {
       const mobiles = existingCustomer.mobile_number
-        ? existingCustomer.mobile_number.split(',').map((n: string) => n.trim())
+        ? existingCustomer.mobile_number
+          .split(',')
+          .map((n: string) => normalizeIndianMobileNumber(n))
+          .filter(Boolean)
         : [];
       console.log(existingCustomer.beat_id, 'existingCustomer.beat_id', existingCustomer)
       setFormData({
@@ -780,7 +865,7 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
       <View style={{ flex: 1, backgroundColor: '#fff' }}>
         <View style={{ backgroundColor: '#E0F2FE', padding: 16, alignItems: 'center' }}>
           <AppText size={16} family="InterSemiBold" color={colors.blue}>
-            Type: {type}
+            Customer Type: {customerTypeName}
           </AppText>
         </View>
         <KeyboardAwareScrollView

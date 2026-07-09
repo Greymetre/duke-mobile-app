@@ -202,7 +202,7 @@ const SubmitOrder = () => {
 
         try {
             const res = await fetch(
-                'http://localhost:8000/api/order/secondary-customers',
+                'https://duke.fieldkonnect.in/api/order/secondary-customers',
                 {
                     headers: {
                         Authorization: `Bearer ${token}`,
@@ -232,7 +232,7 @@ const SubmitOrder = () => {
 
         try {
             const res = await fetch(
-                'http://localhost:8000/api/order/distributors',
+                'https://duke.fieldkonnect.in/api/order/distributors',
                 {
                     headers: {
                         Authorization: `Bearer ${token}`,
@@ -369,7 +369,7 @@ const SubmitOrder = () => {
             console.log('Order Payload:', body);
 
             const res = await fetch(
-                'http://localhost:8000/api/insertOrder',
+                'https://duke.fieldkonnect.in/api/insertOrder',
                 {
                     method: 'POST',
                     headers: {

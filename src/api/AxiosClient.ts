@@ -6,7 +6,7 @@ import { navigationRef } from '../services/NavigationService';
 import { attachAxiosLogging } from './ApiLogger';
 export const BASE_URL = 'https://duke.fieldkonnect.in/';
 export const IMAGE_BASE_URL = 'https://fieldkonnect.in/ksb-pr/';
-// export const BASE_URL = 'http://192.168.1.4:8000/';
+// export const BASE_URL = 'http://127.0.0.1:8000/';
 
 const axiosClient = axios.create({ baseURL: BASE_URL });
 attachAxiosLogging(axiosClient, 'axiosClient');

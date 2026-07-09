@@ -20,8 +20,17 @@ export type RootStackParamList = {
   ForceUpdateScreen: undefined;
   CreatePlan: undefined;
   BottomTab: undefined;
-  CustomerList: undefined;
-  AddCustomer:undefined;
+  CustomerList: {
+    type?: string;
+    beatId?: string | number;
+    customerTypeId?: string | number;
+    customerTypeName?: string;
+  } | undefined;
+  AddCustomer:{
+    customer?: any;
+    customerTypeId?: string | number;
+    customerTypeName?: string;
+  } | undefined;
   AttendanceReport:undefined;
   ExpenseReport:undefined;
   UserActivityPage:undefined;
@@ -29,7 +38,12 @@ export type RootStackParamList = {
   SubmitOrder:undefined;
   AddNewExpense:undefined;
   AttendanceScreen:undefined;
-  AddSecondaryCustomer:undefined;
+  AddSecondaryCustomer:{
+    customer?: any;
+    type?: string;
+    customerTypeId?: string | number;
+    customerTypeName?: string;
+  } | undefined;
   VisitReport:undefined;
   UserTourList:undefined;
   BeatCustomerList:undefined;

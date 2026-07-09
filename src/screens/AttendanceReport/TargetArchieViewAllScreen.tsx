@@ -248,7 +248,7 @@ const TargetArchieViewAllScreen = ({ navigation }: any) => {
     const token = store.getState()?.auth?.token;
     try {
       const res = await fetch(
-        'http://localhost:8000/api/user-attendance-zone-branch',
+        'https://duke.fieldkonnect.in/api/user-attendance-zone-branch',
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -330,7 +330,7 @@ const TargetArchieViewAllScreen = ({ navigation }: any) => {
   const fetchAttendanceWithFilters = async (customFilters: any, tab?: any) => {
     const token = store.getState()?.auth?.token;
     try {
-      let url = 'http://localhost:8000/api/sales/sales-summary?designation=' + (tab || 'asr');
+      let url = 'https://duke.fieldkonnect.in/api/sales/sales-summary?designation=' + (tab || 'asr');
 
       if (customFilters.branch) {
         url += `&branch=${encodeURIComponent(customFilters.branch)}`;

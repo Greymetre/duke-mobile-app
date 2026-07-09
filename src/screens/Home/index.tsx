@@ -45,6 +45,7 @@ interface CustomerTypeItem {
   id: string;
   title: string;
   value: string;
+  customerTypeId: string;
 }
 
 const Home = () => {
@@ -182,7 +183,7 @@ const Home = () => {
       setLoadingPunchStatus(true);
       const token = store.getState()?.auth?.token;
 
-      const res = await axios.get('http://localhost:8000/api/getPunchin', {
+      const res = await axios.get('https://duke.fieldkonnect.in/api/getPunchin', {
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: 'application/json',
@@ -253,7 +254,7 @@ const Home = () => {
       setHomeLoading(true);
       const token = store.getState()?.auth?.token;
 
-      const res = await axios.get('http://localhost:8000/api/attendance/today-summary', {
+      const res = await axios.get('https://duke.fieldkonnect.in/api/attendance/today-summary', {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -274,7 +275,7 @@ const Home = () => {
       setLoadingBalances(true);
       const token = store.getState()?.auth?.token;
 
-      const res = await axios.get('http://localhost:8000/api/leaves/balance', {
+      const res = await axios.get('https://duke.fieldkonnect.in/api/leaves/balance', {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -313,7 +314,7 @@ const Home = () => {
       };
 
 
-      const res = await axios.post('http://localhost:8000/api/addLeaves', payload, {
+      const res = await axios.post('https://duke.fieldkonnect.in/api/addLeaves', payload, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -359,22 +360,28 @@ const Home = () => {
   const isDistributorType = (title: string) =>
     title?.toLowerCase?.().includes('distributor');
 
-  const handleSelectType = (title: string) => {
+  const handleSelectType = (type: CustomerTypeItem) => {
     actionSheetRef.current?.hide();
-    console.log('Selected customer type:', title);
+    console.log('Selected customer type:', type);
 
     if (pressType == 'add') {
-      if (isDistributorType(title)) {
-        navigation.navigate('AddCustomer')
+      if (isDistributorType(type.value)) {
+        navigation.navigate('AddCustomer', {
+          customerTypeId: type.customerTypeId,
+          customerTypeName: type.title,
+        })
       } else {
-        navigation.navigate('AddSecondaryCustomer', { type: title })
+        navigation.navigate('AddSecondaryCustomer', {
+          type: type.value,
+          customerTypeId: type.customerTypeId,
+          customerTypeName: type.title,
+        })
       }
     } else {
-      if (isDistributorType(title)) {
-        navigation.navigate("CustomerList")
-      } else {
-        navigation.navigate("CustomerList", { type: title })
-      }
+      navigation.navigate("CustomerList", {
+        customerTypeId: type.customerTypeId,
+        customerTypeName: type.title,
+      })
     }
   };
 
@@ -529,9 +536,10 @@ const Home = () => {
           id: String(item?.id ?? item?.customertype ?? item?.value ?? `${value}-${index}`),
           title,
           value,
+          customerTypeId: String(item?.id ?? item?.customer_type_id ?? item?.customertype ?? item?.value ?? ''),
         };
       })
-      .filter(Boolean) as CustomerTypeItem[];
+      .filter((item): item is CustomerTypeItem => Boolean(item?.customerTypeId));
   };
 
   const fetchCustomerTypes = async () => {
@@ -539,7 +547,7 @@ const Home = () => {
       setCustomerTypesLoading(true);
       const token = store.getState()?.auth?.token;
 
-      const res = await axios.get('http://localhost:8000/api/getCustomerTypeList', {
+      const res = await axios.get('https://duke.fieldkonnect.in/api/getCustomerTypeList', {
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: 'application/json',
@@ -586,7 +594,7 @@ const Home = () => {
 
     try {
       const response = await fetch(
-        `http://localhost:8000/api/getMyHierarchyUsers?type=RETAILER`,
+        `https://duke.fieldkonnect.in/api/getMyHierarchyUsers?type=RETAILER`,
         {
           method: 'GET',
           headers: {
@@ -649,7 +657,7 @@ const Home = () => {
       const token = store.getState()?.auth?.token;
 
       const response = await axios.get(
-        'http://localhost:8000/api/getAppVersion',
+        'https://duke.fieldkonnect.in/api/getAppVersion',
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -1258,7 +1266,7 @@ const Home = () => {
                 <TouchableOpacity
                   key={type.id}
                   activeOpacity={0.7}
-                  onPress={() => handleSelectType(type.value)}
+                  onPress={() => handleSelectType(type)}
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',

@@ -18,6 +18,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import ActionSheet, { ActionSheetRef } from 'react-native-actions-sheet'
 import axios from 'axios'
 import store, { useAppSelector } from '../../components/redux/Store'
+import { formatMobileNumberList, normalizeIndianMobileNumber } from '../../utils/phone'
 
 type CustomerDetailsProps = {
   navigation: any
@@ -61,7 +62,7 @@ const CustomerDetails = ({ navigation, route }: CustomerDetailsProps) => {
   // Get customer data + location on mount
   useFocusEffect(
     useCallback(() => {
-      handleGetCustomerData(routeItem?.id)
+      handleGetCustomerData(routeItem?.customer_id || routeItem?.id)
     }, [])
   )
 
@@ -81,7 +82,7 @@ const CustomerDetails = ({ navigation, route }: CustomerDetailsProps) => {
       const token = store.getState().auth?.token; // ← get from auth
 
       const response = await axios.put(
-        `http://localhost:8000/api/secondary-customers/${routeItem?.id}/status`,
+        `https://duke.fieldkonnect.in/api/secondary-customers/${routeItem?.id}/status`,
         payload,
         {
           headers: {
@@ -144,14 +145,17 @@ const CustomerDetails = ({ navigation, route }: CustomerDetailsProps) => {
     setLoader(true)
 
     try {
+      const customerId = routeItem?.customer_id || id;
       const res = route?.params?.type
-        ? await mutateSecondaryCustomerData({ id: routeItem?.id, type: routeItem?.type })
+        ? await mutateSecondaryCustomerData({ customer_id: customerId })
         : await mutateCustomerData(id)
 
       if (res?.data?.status === true) {
         console.log(res?.data, 'res?.datares?.data')
         if (route?.params?.type) {
           const data = res?.data?.data
+          const details = data?.customerdetails
+          const address = data?.customeraddress
           setPunchInStatus(data?.status)
           setData(data)
           const distributorNames = res?.data?.distributors
@@ -159,32 +163,32 @@ const CustomerDetails = ({ navigation, route }: CustomerDetailsProps) => {
             .filter(Boolean)
             .join(', ') || null;
           setCustomerData({
-            shop_image: data?.shop_photo,
+            shop_image: data?.shop_photo || details?.shop_image,
             legal_name: data?.shop_name,
-            billing_address: data?.address_line,
-            billing_city: data?.city?.city_name,
+            billing_address: data?.address_line || address?.full_address,
+            billing_city: data?.city?.city_name || address?.cityname?.city_name,
             contact_person: data?.owner_name,
-            mobile: data?.mobile_number,
-            billing_pincode: data?.pincode?.pincode,
-            registration_type: data?.type,
+            mobile: data?.mobile_number || data?.mobile,
+            billing_pincode: data?.pincode?.pincode || address?.pincodename?.pincode,
+            registration_type: data?.type || data?.customer_type,
             owner_photo: data?.owner_photo,
             check_status: res?.data?.check_status,
-            state: data?.state?.state_name || '',
-            district: data?.district?.district_name || '',
-            city: data?.city?.city_name || '',
+            state: data?.state?.state_name || address?.statename?.state_name || '',
+            district: data?.district?.district_name || address?.districtname?.district_name || '',
+            city: data?.city?.city_name || address?.cityname?.city_name || '',
             distributor_name: distributorNames || '',
             beat_id: data?.beat_id || '',
             beat_name: data?.beat?.beat_name || '',
             belt_area_market_name: data?.belt_area_market_name || '',
             gps_location: data?.gps_location || '',
-            gst_number: data?.gst_number || '',
+            gst_number: data?.gst_number || details?.gstin_no || '',
             status: data?.status || '',
-            pan_number: data?.pan_number || '',
+            pan_number: data?.pan_number || details?.pan_no || '',
             bank_account_type: data?.bank_account_type || '',
-            bank_account_number: data?.bank_account_number || '',
-            bank_name: data?.bank_name || '',
-            ifsc_code: data?.ifsc_code || '',
-            account_holder_name: data?.account_holder_name || '',
+            bank_account_number: data?.bank_account_number || details?.account_number || '',
+            bank_name: data?.bank_name || details?.bank_name || '',
+            ifsc_code: data?.ifsc_code || details?.ifsc_code || '',
+            account_holder_name: data?.account_holder_name || details?.account_holder || '',
             gst_attachment: data?.gst_attachment || null,
             pan_attachment: data?.pan_attachment || null,
             bank_proof: data?.bank_proof || null,
@@ -253,7 +257,7 @@ const CustomerDetails = ({ navigation, route }: CustomerDetailsProps) => {
       // })
       navigation.navigate('VisitReport', {
         checkin_id: customerData?.check_status?.last_checkin?.checkin_id,
-        entity_type: route?.params?.type ? 'secondary_customer' : 'distributor',
+        entity_type: route?.params?.type ? 'secondary_customer' : 'customer',
         entity_id: routeItem?.id,
         customerData: customerData, // pass full customer data if needed in report
         latitude: currentLat,
@@ -263,7 +267,7 @@ const CustomerDetails = ({ navigation, route }: CustomerDetailsProps) => {
     } else {
       setCheckInLoading(true)
       const payload = {
-        entity_type: route?.params?.type ? "secondary_customer" : 'distributor',
+        entity_type: route?.params?.type ? "secondary_customer" : 'customer',
         entity_id: routeItem?.id,
         checkin_latitude: currentLat,
         checkin_longitude: currentLng,
@@ -732,7 +736,7 @@ const CustomerDetails = ({ navigation, route }: CustomerDetailsProps) => {
                     </AppText>
                     <View style={{ height: 10 }} />
                     <AppText color="black" size={14} family="InterBold">
-                      {customerData?.mobile ? `+91 ${customerData.mobile}` : '+91 ---'}
+                      {customerData?.mobile ? `+91 ${formatMobileNumberList(customerData.mobile)[0] || normalizeIndianMobileNumber(customerData.mobile)}` : '+91 ---'}
                     </AppText>
                   </View>
                 </View>
@@ -994,10 +998,7 @@ const CustomerDetails = ({ navigation, route }: CustomerDetailsProps) => {
                     );
                   }
 
-                  const numbers = customerData.mobile
-                    .split(',')
-                    .map((num: string) => num.trim())
-                    .filter((num: string | any[]) => num.length > 0);
+                  const numbers = formatMobileNumberList(customerData.mobile);
 
                   if (numbers.length === 0) {
                     return (

@@ -11,7 +11,6 @@ import {
   Linking,
   Alert,
 } from 'react-native';
-import { BlurView } from '@react-native-community/blur';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -28,6 +27,7 @@ import { BASE_URL, IMAGE_BASE_URL } from '../../api/AxiosClient';
 import FastImage from 'react-native-fast-image';
 import { useGetSubmitCheckIN } from '../../api/query/CustomerApi';
 import Toast from 'react-native-toast-message';
+import { normalizeIndianMobileNumber } from '../../utils/phone';
 
 const { width } = Dimensions.get('window');
 
@@ -236,12 +236,12 @@ const SecondaryCustomerCard: React.FC<SolarCardProps> = ({
       .trim()                  // remove whitespace
     : '';
 
-  const cleanPhone = firstMobileNumber.replace(/\D/g, '');
+  const cleanPhone = normalizeIndianMobileNumber(firstMobileNumber);
   // const cleanPhone = phoneNumber ? phoneNumber.replace(/\D/g, '') : '';
-  const cleanWhatsApp = whatsappNumber ? whatsappNumber.replace(/\D/g, '') : '';
+  const cleanWhatsApp = normalizeIndianMobileNumber(whatsappNumber);
 
   // Final WhatsApp number: prefer whatsapp_number, fallback to mobile_number
-  const finalWhatsAppNumber = cleanPhone;
+  const finalWhatsAppNumber = cleanWhatsApp || cleanPhone;
 
   const handleWhatsApp = () => {
     // Check if we have a valid number (either WhatsApp or fallback mobile)
@@ -389,21 +389,6 @@ const SecondaryCustomerCard: React.FC<SolarCardProps> = ({
           <Text style={styles.tagText}>{item?.rating}</Text>
         </View>
       </TouchableOpacity> */}
-      {
-        !type && (
-          <TouchableOpacity style={[styles.playIconWrapper, { top: 30, left: 9 }]} >
-            <BlurView
-              blurType="dark"
-              blurAmount={36}
-              reducedTransparencyFallbackColor="rgba(255, 255, 255, 0.8)"
-            />
-            <View style={[styles.playIconContainer, { backgroundColor: 'rgba(255, 255, 255, 0.9)' }]}>
-              <Text style={styles.tagText}>{item?.status}</Text>
-            </View>
-          </TouchableOpacity>
-        )
-      }
-
       <View style={styles.infoContainer}>
         <Text style={styles.companyName} numberOfLines={2}>
           {item?.shop_name}

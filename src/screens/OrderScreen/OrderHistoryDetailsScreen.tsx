@@ -14,6 +14,7 @@ import { NativeModules } from 'react-native';
 import ReactNativeBlobUtil from 'react-native-blob-util';
 const { HtmlToPdf } = NativeModules;
 import { Platform } from 'react-native';
+import { normalizeIndianMobileNumber } from '../../utils/phone';
 
 interface OrderItem {
     id: string;               // unique key
@@ -107,7 +108,7 @@ const OrderHistoryDetailsScreen = () => {
 
         try {
             const response = await fetch(
-                `http://localhost:8000/api/getOrderDetails?order_id=${orderId}`,
+                `https://duke.fieldkonnect.in/api/getOrderDetails?order_id=${orderId}`,
                 {
                     method: 'GET',
                     headers: {
@@ -235,9 +236,9 @@ const OrderHistoryDetailsScreen = () => {
 
             <tr>
                 <td>Mobile Number</td>
-                <td>${orderDetails?.buyers?.mobile_number || '-'}</td>
+                <td>${orderDetails?.buyers?.mobile_number ? normalizeIndianMobileNumber(orderDetails.buyers.mobile_number) : '-'}</td>
                 <td>Mobile Number</td>
-                <td>${orderDetails?.seller?.mobile || '-'}</td>
+                <td>${orderDetails?.seller?.mobile ? normalizeIndianMobileNumber(orderDetails.seller.mobile) : '-'}</td>
             </tr>
 
             <tr>

@@ -130,7 +130,7 @@ const RetailersPerformanceViewAllScreen = ({ navigation }: any) => {
     const token = store.getState()?.auth?.token;
     try {
       const res = await fetch(
-        'http://localhost:8000/api/user-attendance-zone-branch',
+        'https://duke.fieldkonnect.in/api/user-attendance-zone-branch',
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -204,7 +204,7 @@ const RetailersPerformanceViewAllScreen = ({ navigation }: any) => {
   const fetchAttendanceWithFilters = async (customFilters: any, tab?: any) => {
     const token = store.getState()?.auth?.token;
     try {
-      let url = 'http://localhost:8000/api/sales/retailer-sales-summary?designation=' + (tab || 'asr').toLowerCase();
+      let url = 'https://duke.fieldkonnect.in/api/sales/retailer-sales-summary?designation=' + (tab || 'asr').toLowerCase();
 
       if (customFilters.branch) {
         url += `&branch=${encodeURIComponent(customFilters.branch)}`;

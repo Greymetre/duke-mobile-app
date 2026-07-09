@@ -20,6 +20,34 @@ export const useMutateCustomerListApi = () => {
     });
 };
 
+export const useMutateCustomerTypeListApi = () => {
+    return useMutation({
+        mutationFn: ({
+            customer_type_id,
+            search,
+            page,
+            pageSize = 5,
+        }: {
+            customer_type_id: string | number;
+            search?: string;
+            page?: number;
+            pageSize?: number;
+        }) => {
+            const params: Record<string, any> = {
+                customer_type_id,
+                page: page || 1,
+                pageSize,
+            };
+
+            if (search && search.trim().length > 0) {
+                params.global_search = search.trim();
+            }
+
+            return axiosClient.get(API_ENDPOINT.GET_CUSTOMER_LIST, { params });
+        },
+    });
+};
+
 // export const useMutateSecondaryCustListApi = () => {
 //   return useMutation({
 //     mutationFn: ({ type, search, page }: { type: string; search?: string; page?: number }) => {
@@ -260,9 +288,10 @@ export const useGetCustomerData = () => {
 
 export const useGetSecondaryCustomerData = () => {
     return useMutation({
-        mutationFn: (payload: { id: any, type: string }) =>
+        mutationFn: (payload: { customer_id: any }) =>
             axiosClient.get(
-                API_ENDPOINT.SECONDARY_CUSTOMER + `/${payload?.id}?type=${payload?.type}`
+                API_ENDPOINT.GET_CUSTOMER_INFO,
+                { params: { customer_id: payload?.customer_id } }
             ),
     });
 };

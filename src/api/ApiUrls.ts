@@ -21,6 +21,9 @@ export const API_ENDPOINT = {
   //secondary cistomer 
   SECONDARY_CUSTOMER_GET: "api/secondary-customers?type=",
   GET_BEAT_CUSTOMER_LIST: "api/getBeatCustomers?beat_id=",
+  GET_CUSTOMER_LIST: "api/getCustomerList",
+  GET_CUSTOMER_INFO: "api/getCustomerInfo",
+  STORE_CUSTOMER: "api/storeCustomer",
   SECONDARY_CUSTOMER: "api/secondary-customers",
   // MASTER_DISTRIBUTOR_POST:"api/master-distributors",
   // GET_SUPERVISOR_API : "api/master-distributors/supervisors",

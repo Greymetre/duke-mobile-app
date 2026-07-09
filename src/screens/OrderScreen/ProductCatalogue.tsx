@@ -128,7 +128,7 @@ const ProductCatalogue = ({ navigation, route }: ProductCatalogueProps) => {
     const fetchSegments = async () => {
         try {
             const res = await fetch(
-                `http://localhost:8000/api/getCategoryList`,
+                `https://duke.fieldkonnect.in/api/getCategoryList`,
                 {
                     headers: {
                         Authorization: `Bearer ${token}`,
@@ -162,8 +162,8 @@ const ProductCatalogue = ({ navigation, route }: ProductCatalogueProps) => {
         try {
             const res = await fetch(
                 !selectedSegmentId 
-                ? `http://localhost:8000/api/getSubCategoryList`
-                : `http://localhost:8000/api/getSubCategoryList?category_id=${selectedSegmentId}`,
+                ? `https://duke.fieldkonnect.in/api/getSubCategoryList`
+                : `https://duke.fieldkonnect.in/api/getSubCategoryList?category_id=${selectedSegmentId}`,
                 {
                     headers: {
                         Authorization: `Bearer ${token}`,
@@ -199,8 +199,8 @@ const ProductCatalogue = ({ navigation, route }: ProductCatalogueProps) => {
 
         try {
             const url = subcategoryId
-                ? `http://localhost:8000/api/getProductList?subcategory_id=${subcategoryId}`
-                : `http://localhost:8000/api/getProductList`;
+                ? `https://duke.fieldkonnect.in/api/getProductList?subcategory_id=${subcategoryId}`
+                : `https://duke.fieldkonnect.in/api/getProductList`;
 
             const res = await fetch(url, {
                 headers: {
@@ -235,7 +235,7 @@ const ProductCatalogue = ({ navigation, route }: ProductCatalogueProps) => {
     const fetchProductDetails = async (productId: number | string) => {
         try {
             const res = await fetch(
-                `http://localhost:8000/api/getProductDetails?product_id=${productId}`,
+                `https://duke.fieldkonnect.in/api/getProductDetails?product_id=${productId}`,
                 {
                     headers: {
                         Authorization: `Bearer ${token}`,

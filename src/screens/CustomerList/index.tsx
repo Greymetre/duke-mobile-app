@@ -9,7 +9,7 @@ import { colors } from '../../utils/Colors';
 import { SearchSvgIcon } from '../../assets/svgs/HomePageSvgs';
 import { DATA } from '../../components/Comman/CommanFunction';
 import CustomerCard from '../../components/atoms/CustomerCard';
-import { useMutateBeatCustomerList, useMutateCustomerListApi, useMutateSecondaryCustListApi } from '../../api/query/CustomerApi';
+import { useMutateBeatCustomerList, useMutateCustomerListApi, useMutateCustomerTypeListApi, useMutateSecondaryCustListApi } from '../../api/query/CustomerApi';
 import SecondaryCustomerCard from '../../components/atoms/SecondaryCustomerCard';
 import Geolocation from '@react-native-community/geolocation';
 import Toast from 'react-native-toast-message';
@@ -25,6 +25,7 @@ const CustomerList = ({ route }: any) => {
   const [customerData, setCustomerData] = useState<any[]>([]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const { mutateAsync: mutateCustomerList } = useMutateCustomerListApi();
+  const { mutateAsync: mutateCustomerTypeList } = useMutateCustomerTypeListApi();
   const { mutateAsync: mutateSecondaryCustList } = useMutateSecondaryCustListApi();
   const { mutateAsync: mutateBeatCustomerList } = useMutateBeatCustomerList();
   // const [currentLat, setCurrentLat] = useState<number | null>(null)
@@ -33,7 +34,10 @@ const CustomerList = ({ route }: any) => {
   const [isPunchedIn, setIsPunchedIn] = useState<any>(false);
   const [hasActiveCheckInSomewhere, setHasActiveCheckInSomewhere] = useState(false);
   const [activeCheckInCustomerId, setActiveCheckInCustomerId] = useState<string | null>(null);
-  const isSecondary = !!route?.params?.type;
+  const customerTypeId = route?.params?.customerTypeId;
+  const customerTypeName = route?.params?.customerTypeName;
+  const isCustomerTypeList = !!customerTypeId;
+  const isSecondary = !!route?.params?.type && !isCustomerTypeList;
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(null);
   const [hasMore, setHasMore] = useState(true);
@@ -62,7 +66,7 @@ const CustomerList = ({ route }: any) => {
   ];
   useFocusEffect(
     useCallback(() => {
-      if (route?.params?.type) {
+      if (route?.params?.type || isCustomerTypeList) {
         fetchCustomers(
           1,
           false,
@@ -86,9 +90,9 @@ const CustomerList = ({ route }: any) => {
   useFocusEffect(
     useCallback(() => {
       navigation.setOptions({
-        headerTitle: `Customers${total ? ` (${total})` : ''}`,     // ← change to whatever you want
+        headerTitle: `${customerTypeName || 'Customers'}${total ? ` (${total})` : ''}`,
       });
-    }, [navigation, total])
+    }, [navigation, total, customerTypeName])
   );
 
 
@@ -97,7 +101,7 @@ const CustomerList = ({ route }: any) => {
       const token = store.getState()?.auth?.token;
 
       const res = await axios.get(
-        'http://localhost:8000/api/getMyHierarchyUsers', // ← your endpoint 
+        'https://duke.fieldkonnect.in/api/getMyHierarchyUsers', // ← your endpoint 
         {
           headers: { Authorization: `Bearer ${token}` },
           params: { type: route.params.type }, // optional, if backend needs it
@@ -135,7 +139,7 @@ const CustomerList = ({ route }: any) => {
     try {
       const token = store.getState()?.auth?.token;
 
-      const res = await axios.get('http://localhost:8000/api/getPunchin', {
+      const res = await axios.get('https://duke.fieldkonnect.in/api/getPunchin', {
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: 'application/json',
@@ -188,7 +192,7 @@ const CustomerList = ({ route }: any) => {
       const token = store.getState()?.auth?.token;
 
       const res = await axios.get(
-        'http://localhost:8000/api/secondary-customer/cities',
+        'https://duke.fieldkonnect.in/api/secondary-customer/cities',
         {
           headers: { Authorization: `Bearer ${token}` },
         }
@@ -206,7 +210,7 @@ const CustomerList = ({ route }: any) => {
       const token = store.getState()?.auth?.token;
 
       const res = await axios.get(
-        'http://localhost:8000/api/getCurrentOpenCheckin',
+        'https://duke.fieldkonnect.in/api/getCurrentOpenCheckin',
         {
           headers: { Authorization: `Bearer ${token}` },
         }
@@ -256,6 +260,13 @@ const CustomerList = ({ route }: any) => {
           city_name: clearCity ? null : overrideCity?.city_name ?? selectedCity?.city_name,
           // for_user_id: clearUser ? null : overrideUser?.id ?? selectedUser?.id,
         });
+      } else if (isCustomerTypeList) {
+        res = await mutateCustomerTypeList({
+          customer_type_id: customerTypeId,
+          search: searchText,
+          page: pageNumber,
+          pageSize: 5,
+        });
       } else if (isSecondary) {
         res = await mutateSecondaryCustList({
           type: route.params.type,
@@ -302,16 +313,21 @@ const CustomerList = ({ route }: any) => {
       }
 
 
-      setHasMore(newData.length > 0);
+      const pagination = res?.data?.data;
+      setHasMore(
+        pagination?.last_page
+          ? pageNumber < pagination.last_page
+          : newData.length > 0
+      );
       setTotal(res?.data?.data?.total);
 
-    } catch (error) {
+    } catch (error: any) {
       console.log("Customer list error:", error?.response);
     } finally {
       setLoader(false);
       setLoader1(false)
     }
-  }, [searchText, isSecondary, selectedStatus, selectedCity, selectedUser, navigation, route]);
+  }, [searchText, isCustomerTypeList, customerTypeId, isSecondary, selectedStatus, selectedCity, selectedUser, navigation, route]);
 
 
   const clearFilters = () => {
@@ -427,7 +443,7 @@ const CustomerList = ({ route }: any) => {
           ) : (
             <FlatList
               data={customerData}
-              keyExtractor={(item) => item.id}
+              keyExtractor={(item) => String(item.id)}
               renderItem={({ item, index }) => {
                 if (route?.params?.beatId) {
                   return (
@@ -435,14 +451,14 @@ const CustomerList = ({ route }: any) => {
                       handleCUrtrentCheckin()
                     }} />
                   )
-                } else if (isSecondary) {
+                } else if (isSecondary || isCustomerTypeList) {
                   return (
                     <SecondaryCustomerCard currentLat={currentLat} currentLng={currentLng} locationError={locationError} item={item} navigation={navigation} index={index} isPunchedIn={isPunchedIn} onCheckInPress={() => {
                       handleCUrtrentCheckin()
                     }} />
                   )
                 } else {
-                  return (<CustomerCard currentLat={currentLng} currentLng={currentLng} locationError={locationError} item={item} navigation={navigation} index={index} isPunchedIn={isPunchedIn} onCheckInPress={() => {
+                  return (<CustomerCard currentLat={currentLat} currentLng={currentLng} locationError={locationError} item={item} navigation={navigation} index={index} isPunchedIn={isPunchedIn} onCheckInPress={() => {
                     handleCUrtrentCheckin()
                   }} />)
                 }
@@ -452,9 +468,12 @@ const CustomerList = ({ route }: any) => {
                   return (
                     <SecondaryCustomerCard currentLat={currentLat} currentLng={currentLng} locationError={locationError} item={currentCheckin?.entity_details} navigation={navigation} index={-1} isPunchedIn={isPunchedIn} type={currentCheckin} />
                   )
-                } else if (currentCheckin?.entity_details && currentCheckin?.entity_type == "distributor") {
+                } else if (
+                  currentCheckin?.entity_details &&
+                  (currentCheckin?.entity_type == "customer" || currentCheckin?.entity_type == "distributor")
+                ) {
                   return (
-                    <CustomerCard currentLat={currentLng} currentLng={currentLng} locationError={locationError} item={currentCheckin?.entity_details} navigation={navigation} index={-1} isPunchedIn={isPunchedIn} type={currentCheckin} />
+                    <CustomerCard currentLat={currentLat} currentLng={currentLng} locationError={locationError} item={currentCheckin?.entity_details} navigation={navigation} index={-1} isPunchedIn={isPunchedIn} type={currentCheckin} />
                   )
                 }
               }}

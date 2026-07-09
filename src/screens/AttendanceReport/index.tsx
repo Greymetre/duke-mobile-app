@@ -158,7 +158,7 @@ const AttendanceReport = ({ navigation }: any) => {
 
     try {
       const response = await fetch(
-        'http://localhost:8000/api/designations',
+        'https://duke.fieldkonnect.in/api/designations',
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -203,7 +203,7 @@ const AttendanceReport = ({ navigation }: any) => {
 
     try {
       const response = await fetch(
-        'http://localhost:8000/api/user-attendance-zone-branch',
+        'https://duke.fieldkonnect.in/api/user-attendance-zone-branch',
         {
           headers: {
             Authorization: `Bearer ${token}`,
