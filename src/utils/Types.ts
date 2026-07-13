@@ -33,10 +33,17 @@ export type RootStackParamList = {
   } | undefined;
   AttendanceReport:undefined;
   ExpenseReport:undefined;
+  ExpenseDetails:{
+    expense?: any;
+    expense_id?: string | number;
+    mode?: 'my' | 'approval';
+  } | undefined;
   UserActivityPage:undefined;
   ProductCatalogue:undefined;
   SubmitOrder:undefined;
-  AddNewExpense:undefined;
+  AddNewExpense:{
+    expense?: any;
+  } | undefined;
   AttendanceScreen:undefined;
   AddSecondaryCustomer:{
     customer?: any;

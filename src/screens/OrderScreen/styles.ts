@@ -90,9 +90,9 @@ export const styles = StyleSheet.create({
         gap: 20
     },
     productImage: {
-        height: 100,
-        width: 100,
-        borderRadius: 20
+        height: '100%',
+        width: '100%',
+        borderRadius: 18
     },
     productContainer: {
         height: 160,
@@ -101,7 +101,8 @@ export const styles = StyleSheet.create({
         borderWidth: 4,
         justifyContent: 'center',
         alignItems: 'center',
-        borderColor: colors.blue
+        borderColor: colors.blue,
+        overflow: 'hidden'
     },
     tableContainer: {
         // marginBottom: rw(14),

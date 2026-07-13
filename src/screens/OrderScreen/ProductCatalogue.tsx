@@ -43,6 +43,7 @@ const ProductCatalogue = ({ navigation, route }: ProductCatalogueProps) => {
     const [loadingProducts, setLoadingProducts] = useState(false);
     const [loadingFamily, setLoadingFamily] = useState<boolean>(true);
     const [productDetails, setProductDetails] = useState<any | null>(null);
+    const [productImageError, setProductImageError] = useState(false);
     const [quantity, setQuantity] = useState(1);
     const [isEditingQty, setIsEditingQty] = useState(false);
     const [tempQuantity, setTempQuantity] = useState<string>('');
@@ -246,6 +247,7 @@ const ProductCatalogue = ({ navigation, route }: ProductCatalogueProps) => {
             const json = await res.json();
 
             setProductDetails(json?.data || null);
+            setProductImageError(false);
         } catch (error) {
             console.log('Product details error', error);
         }
@@ -378,7 +380,7 @@ const ProductCatalogue = ({ navigation, route }: ProductCatalogueProps) => {
                 {/* <ScrollView style={[styles.container, { paddingHorizontal: rw(18) }]} keyboardDismissMode='on-drag' showsVerticalScrollIndicator={false}> */}
                 <View style={[styles.row, { gap: 10, marginVertical: 20 }]}>
                     <View style={{ flex: 1, gap: 10 }}>
-                        <AppText size={16} color='black' family='InterBold' opacity={0.8}>Segment Name</AppText>
+                        <AppText size={16} color='black' family='InterBold' opacity={0.8}>Category</AppText>
 
                         <Dropdown
                             style={styles.selectUser}
@@ -391,8 +393,8 @@ const ProductCatalogue = ({ navigation, route }: ProductCatalogueProps) => {
                             maxHeight={300}
                             labelField="label"
                             valueField="value"
-                            placeholder="Select segment"
-                            searchPlaceholder="Search segment..."
+                            placeholder="Select category"
+                            searchPlaceholder="Search category..."
                             value={selectedSegmentId}
                             onChange={(item) => {
                                 setSelectedSegmentId(item.value);
@@ -408,7 +410,7 @@ const ProductCatalogue = ({ navigation, route }: ProductCatalogueProps) => {
                 </View>
                 <View style={[styles.row, { gap: 10, marginBottom: 20 }]}>
                     <View style={{ flex: 1, gap: 10 }}>
-                        <AppText size={16} color='black' family='InterBold' opacity={0.8}>Family Name</AppText>
+                        <AppText size={16} color='black' family='InterBold' opacity={0.8}>Subcategory</AppText>
                         <Dropdown
                             style={styles.selectUser}
                             placeholderStyle={{ color: '#718096', fontSize: 14 }}
@@ -419,8 +421,8 @@ const ProductCatalogue = ({ navigation, route }: ProductCatalogueProps) => {
                             maxHeight={300}
                             labelField="label"
                             valueField="value"
-                            placeholder="Select family"
-                            searchPlaceholder="Search family..."
+                            placeholder="Select subcategory"
+                            searchPlaceholder="Search subcategory..."
                             value={selectedFamilyId}
                             onChange={(item) => {
                                 setSelectedFamilyId(item.value);
@@ -483,7 +485,16 @@ const ProductCatalogue = ({ navigation, route }: ProductCatalogueProps) => {
                     productDetails && (
                         <View style={styles.quantitySection}>
                             <View style={styles.productContainer}>
-                                <FastImage style={styles.productImage} source={require('../../assets/images/Dummy/order2.png')} resizeMode='contain' />
+                                <FastImage
+                                    style={styles.productImage}
+                                    source={
+                                        productDetails?.product_image && !productImageError
+                                            ? { uri: productDetails.product_image }
+                                            : require('../../assets/images/Dummy/order2.png')
+                                    }
+                                    resizeMode='cover'
+                                    onError={() => setProductImageError(true)}
+                                />
                             </View>
                             <View style={[styles.tableContainer, { alignSelf: 'center' }]}>
                                 <View style={[styles.tableRow, {
@@ -493,7 +504,7 @@ const ProductCatalogue = ({ navigation, route }: ProductCatalogueProps) => {
                                 }]}>
                                     <View style={{ width: '48%' }}>
                                         <AppText size={14} color='black' family='InterSemiBold' opacity={0.8}>
-                                            Family
+                                            Subcategory
                                         </AppText>
                                         <AppText size={13} color="black" family='InterRegular' opacity={0.8}>
                                             {productDetails?.subcategory_name}
@@ -501,7 +512,7 @@ const ProductCatalogue = ({ navigation, route }: ProductCatalogueProps) => {
                                     </View>
                                     <View style={{ width: '48%', alignItems: 'center' }}>
                                         <AppText size={14} color='black' family='InterSemiBold' opacity={0.8}>
-                                            Model
+                                            Product
                                         </AppText>
                                         <AppText size={13} color="black" family='InterRegular' opacity={0.8} align='center'>
                                             {productDetails?.product_name}

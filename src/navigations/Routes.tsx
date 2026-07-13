@@ -1,4 +1,3 @@
-import { View, Text } from 'react-native'
 import React, { useEffect } from 'react'
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../utils/Types';
@@ -11,13 +10,14 @@ import BottomTab from './BottomTab';
 import CustomerList from '../screens/CustomerList';
 import AddCustomer from '../screens/AddCustomer';
 import ExpenseReport from '../screens/ExpenseReport';
+import ExpenseDetails from '../screens/ExpenseReport/ExpenseDetails';
 import AttendanceReport from '../screens/AttendanceReport';
 import UserActivityScreen from '../screens/UserActivity';
 import ProductCatalogue from '../screens/OrderScreen/ProductCatalogue';
 import SubmitOrder from '../screens/OrderScreen/SubmitOrder';
 import AddNewExpense from '../screens/AddNewExpense';
 import AttendanceScreen from '../screens/AttendanceReport/AttendanceScreen';
-import store, { useAppSelector } from '../components/redux/Store';
+import { useAppSelector } from '../components/redux/Store';
 import AddSecondaryCustomer from '../screens/AddCustomer/AddSecondaryCustomer';
 import VisitReport from '../screens/AttendanceReport/VisitReport';
 import UserTourList from '../screens/TourPlan/UserTourList';
@@ -45,7 +45,7 @@ const Routes = () => {
 
   useEffect(() => {
     dispatch(setActiveBg(false));
-  }, [])
+  }, [dispatch])
 
   return (
     <>
@@ -78,7 +78,11 @@ const Routes = () => {
         }} />
         <Stack.Screen name='ExpenseReport' component={ExpenseReport} options={{
           headerShown: true,
-          title: 'Expense Approval'
+          title: 'Expenses'
+        }} />
+        <Stack.Screen name='ExpenseDetails' component={ExpenseDetails} options={{
+          headerShown: true,
+          title: 'Expense Details'
         }} />
         <Stack.Screen name='OrderHistoryDetailsScreen' component={OrderHistoryDetailsScreen} options={{
           headerShown: true,

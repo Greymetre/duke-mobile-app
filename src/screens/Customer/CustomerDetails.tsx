@@ -257,7 +257,7 @@ const CustomerDetails = ({ navigation, route }: CustomerDetailsProps) => {
       // })
       navigation.navigate('VisitReport', {
         checkin_id: customerData?.check_status?.last_checkin?.checkin_id,
-        entity_type: route?.params?.type ? 'secondary_customer' : 'customer',
+        entity_type: 'customer',
         entity_id: routeItem?.id,
         customerData: customerData, // pass full customer data if needed in report
         latitude: currentLat,
@@ -267,7 +267,7 @@ const CustomerDetails = ({ navigation, route }: CustomerDetailsProps) => {
     } else {
       setCheckInLoading(true)
       const payload = {
-        entity_type: route?.params?.type ? "secondary_customer" : 'customer',
+        entity_type: 'customer',
         entity_id: routeItem?.id,
         checkin_latitude: currentLat,
         checkin_longitude: currentLng,

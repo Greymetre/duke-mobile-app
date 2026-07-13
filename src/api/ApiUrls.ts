@@ -21,6 +21,7 @@ export const API_ENDPOINT = {
   //secondary cistomer 
   SECONDARY_CUSTOMER_GET: "api/secondary-customers?type=",
   GET_BEAT_CUSTOMER_LIST: "api/getBeatCustomers?beat_id=",
+  GET_CUSTOMER_TYPE_LIST: "api/getCustomerTypeList",
   GET_CUSTOMER_LIST: "api/getCustomerList",
   GET_CUSTOMER_INFO: "api/getCustomerInfo",
   STORE_CUSTOMER: "api/storeCustomer",
@@ -33,6 +34,7 @@ export const API_ENDPOINT = {
   TOUR_PLAN_GET: "api/tour/global",
   TOUR_PLAN_CHANGE_STATUS: "api/tour-plan/changeStatus",
   TOUR_GET_SHOW: "api/tour/show",
+  TOUR_OBJECTIVES: "api/tour/objectives",
   BEAT_PLAN_DATA: "api/getTodaySchedul",
 
   //Attendance api
@@ -46,5 +48,15 @@ export const API_ENDPOINT = {
   CHANGE_ATTENDANCE_STATUS: "api/attendance/changeStatus",
   //user activity 
   USER_ACTIVITY: "api/user/activity",
+
+  // Expense APIs
+  GET_EXPENSES_TYPE: "api/getExpensesType",
+  CREATE_EXPENSE: "api/createExpense",
+  UPDATE_EXPENSE: "api/updateExpense",
+  EXPENSE_LISTING: "api/expenseListing",
+  ALL_EXPENSE_LISTING: "api/allExpenseListing",
+  EXPENSE_DETAILS: "api/expenseDetails",
+  APPROVE_EXPENSE: "api/approveExpense",
+  REJECT_EXPENSE: "api/rejectExpense",
 
 };

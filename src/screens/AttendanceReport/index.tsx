@@ -1095,35 +1095,35 @@ const AttendanceReport = ({ navigation }: any) => {
             </Pressable>
           </View>
           <ScrollView style={{ width: '100%', maxHeight: SCREEN_HEIGHT * 0.7 }} showsVerticalScrollIndicator={false} keyboardDismissMode='on-drag'>
-            <View style={styles.mainOCntainer} >
+              <View style={styles.mainOCntainer} >
               <View style={[styles.row, { gap: 21 }]}>
                 <View style={styles.firstViewModal}>
-                  <AppText size={14} family='InterMedium' color='#333333'>User Id</AppText>
-                  <AppText size={14} family='InterBold' color='black'>{attendanceData?.user_id}</AppText>
-                </View>
-                <View style={[styles.firstViewModal, { flex: 0.45 }]}>
                   <AppText size={14} family='InterMedium' color='#333333'>Employe Code</AppText>
                   <AppText size={14} family='InterBold' color='black'>{attendanceData?.users?.employee_codes}</AppText>
                 </View>
-              </View>
-              <View style={[styles.row, { gap: 21, marginTop: 15 }]}>
-                <View style={styles.firstViewModal}>
+                <View style={[styles.firstViewModal, { flex: 0.45 }]}>
                   <AppText size={14} family='InterMedium' color='#333333'>Employe Name</AppText>
                   <AppText size={14} family='InterBold' color='black'>{attendanceData?.users?.name}</AppText>
                 </View>
-                {
-                  !leaveCheck && attendanceDataVisit?.city_names_string && (
-                    <View style={[styles.firstViewModal, { flex: 0.45 }]}>
+              </View>
+              {
+                !leaveCheck && attendanceDataVisit?.city_names_string && (
+                  <View style={[styles.row, { gap: 21, marginTop: 15 }]}>
+                    <View style={styles.firstViewModal}>
                       <AppText size={14} family='InterMedium' color='#333333'>Punch In City</AppText>
                       <AppText size={14} family='InterBold' color='black'>{attendanceDataVisit?.city_names_string}</AppText>
                     </View>
-                  )
-                }
-                {/* <View style={[styles.firstViewModal, { flex: 0.45 }]}>
+                    <View style={[styles.firstViewModal, { flex: 0.45 }]}>
+                      <AppText size={14} family='InterMedium' color='#333333'>Punch In Date</AppText>
+                      <AppText size={14} family='InterBold' color='black'>{attendanceData?.punchin_date}</AppText>
+                    </View>
+                  </View>
+                )
+              }
+              {/* <View style={[styles.firstViewModal, { flex: 0.45 }]}>
                 <AppText size={14} family='InterMedium' color='#333333'>Employe Code</AppText>
                 <AppText size={14} family='InterBold' color='black'>{attendanceData?.users?.employee_codes}</AppText>
               </View> */}
-              </View>
               {
                 leaveCheck && (
                   <View style={[styles.row, { gap: 21, marginTop: 15 }]}>
@@ -1140,35 +1140,59 @@ const AttendanceReport = ({ navigation }: any) => {
                     <View style={[styles.row, { gap: 21, marginTop: 15 }]}>
 
                       <View style={styles.firstViewModal}>
-                        <AppText size={14} family='InterMedium' color='#333333'>Punch In Date</AppText>
-                        <AppText size={14} family='InterBold' color='black'>{attendanceData?.punchin_date}</AppText>
+                        <AppText size={14} family='InterMedium' color='#333333'>
+                          {attendanceDataVisit?.city_names_string ? 'Punch In Time' : 'Punch In Date'}
+                        </AppText>
+                        <AppText size={14} family='InterBold' color='black'>
+                          {attendanceDataVisit?.city_names_string ? attendanceData?.punchin_time : attendanceData?.punchin_date}
+                        </AppText>
                       </View>
                       <View style={[styles.firstViewModal, { flex: 0.45 }]}>
-                        <AppText size={14} family='InterMedium' color='#333333'>Punch In Time</AppText>
-                        <AppText size={14} family='InterBold' color='black'>{attendanceData?.punchin_time}</AppText>
+                        <AppText size={14} family='InterMedium' color='#333333'>
+                          {attendanceDataVisit?.city_names_string ? 'Punch Out Date' : 'Punch In Time'}
+                        </AppText>
+                        <AppText size={14} family='InterBold' color='black'>
+                          {attendanceDataVisit?.city_names_string ? attendanceData?.punchout_date : attendanceData?.punchin_time}
+                        </AppText>
                       </View>
                     </View>
                     <View style={[styles.row, { gap: 21, marginTop: 15 }]}>
                       <View style={styles.firstViewModal}>
-                        <AppText size={14} family='InterMedium' color='#333333'>Punch Out Date</AppText>
-                        <AppText size={14} family='InterBold' color='black'>{attendanceData?.punchout_date}</AppText>
+                        <AppText size={14} family='InterMedium' color='#333333'>
+                          {attendanceDataVisit?.city_names_string ? 'Working Time' : 'Punch Out Date'}
+                        </AppText>
+                        <AppText size={14} family='InterBold' color='black'>
+                          {attendanceDataVisit?.city_names_string ? attendanceData?.worked_time : attendanceData?.punchout_date}
+                        </AppText>
                       </View>
                       <View style={[styles.firstViewModal, { flex: 0.45 }]}>
-                        <AppText size={14} family='InterMedium' color='#333333'>Working Time</AppText>
-                        <AppText size={14} family='InterBold' color='black'>{attendanceData?.worked_time}</AppText>
+                        <AppText size={14} family='InterMedium' color='#333333'>
+                          {attendanceDataVisit?.city_names_string ? 'Punch Out Time' : 'Working Time'}
+                        </AppText>
+                        <AppText size={14} family='InterBold' color='black'>
+                          {attendanceDataVisit?.city_names_string ? attendanceData?.punchout_time : attendanceData?.worked_time}
+                        </AppText>
                       </View>
                     </View>
                     <View style={[styles.row, { gap: 21, marginTop: 15 }]}>
-                      <View style={styles.firstViewModal}>
-                        <AppText size={14} family='InterMedium' color='#333333'>Punch Out Time</AppText>
-                        <AppText size={14} family='InterBold' color='black'>{attendanceData?.punchout_time}</AppText>
-                      </View>
-                      <View style={[styles.firstViewModal, { flex: 0.45 }]}>
+                      {!attendanceDataVisit?.city_names_string && (
+                        <View style={styles.firstViewModal}>
+                          <AppText size={14} family='InterMedium' color='#333333'>Punch Out Time</AppText>
+                          <AppText size={14} family='InterBold' color='black'>{attendanceData?.punchout_time}</AppText>
+                        </View>
+                      )}
+                      <View style={[styles.firstViewModal, attendanceDataVisit?.city_names_string ? {} : { flex: 0.45 }]}>
                         <AppText size={14} family='InterMedium' color='#333333'>Tour Plan City</AppText>
                         <AppText size={14} family='InterBold' color='black'>
                           {getTourTownNames()}
                         </AppText>
                       </View>
+                      {attendanceDataVisit?.city_names_string && (
+                        <View style={[styles.firstViewModal, { flex: 0.45 }]}>
+                          <AppText size={14} family='InterMedium' color='#333333'>Tour Plan Objective</AppText>
+                          <AppText size={14} family='InterBold' color='black'>{getTourObjective()}</AppText>
+                        </View>
+                      )}
                     </View>
                   </>
                 )
@@ -1234,7 +1258,7 @@ const AttendanceReport = ({ navigation }: any) => {
                 )
               }
               {
-                !leaveCheck && (
+                !leaveCheck && !attendanceDataVisit?.city_names_string && (
                   <>
                     <View style={[styles.row, { gap: 21, marginTop: 15 }]}>
                       <View style={[styles.firstViewModal, { flex: 1 }]}>

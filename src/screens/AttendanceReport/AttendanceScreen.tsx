@@ -35,6 +35,7 @@ import ActionSheet, { ActionSheetRef } from 'react-native-actions-sheet';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import useLocationHook from '../../api/hooks/uselocationhook';
 import { startLiveLocationTracking, stopLiveLocationTracking } from '../../services/liveLocationService';
+import { getTourObjectivesApi, normalizeTourObjectives } from '../../api/query/TourPlanApi';
 
 interface DropdownItem {
   label: string;
@@ -138,6 +139,8 @@ const AttendanceScreen: React.FC<{ navigation: any; route: any }> = ({ navigatio
   const [showBeatModal, setShowBeatModal] = useState(false);
   const [beatSearchText, setBeatSearchText] = useState('');
   const [customObjective, setCustomObjective] = useState<string>('');
+  const [objectiveOptions, setObjectiveOptions] = useState<ObjectiveItem[]>([]);
+  const [objectivesLoading, setObjectivesLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   // Action Sheet ref for objectives
@@ -202,7 +205,21 @@ const AttendanceScreen: React.FC<{ navigation: any; route: any }> = ({ navigatio
 
   useEffect(() => {
     fetchLocation();
+    fetchObjectives();
   }, []);
+
+  const fetchObjectives = async () => {
+    try {
+      setObjectivesLoading(true);
+      const res = await getTourObjectivesApi();
+      setObjectiveOptions(normalizeTourObjectives(res?.data));
+    } catch (error) {
+      console.log('Tour objectives error:', error);
+      Toast.show({ type: 'error', text1: 'Failed to load objectives' });
+    } finally {
+      setObjectivesLoading(false);
+    }
+  };
 
   const findCityByName = (cityName: string): DropdownItem | undefined => {
     return cities.find(
@@ -398,15 +415,9 @@ const AttendanceScreen: React.FC<{ navigation: any; route: any }> = ({ navigatio
   // Objectives logic
   // ────────────────────────────────────────────────
   const getAllObjectives = (): ObjectiveItem[] => {
-    const staticObjectives: ObjectiveItem[] = [
-      { label: 'Retailer Visit', value: 'Retailer Visit' },
-      { label: 'Retailer Meet', value: 'Retailer Meet' },
-      { label: 'Nukkad Meet', value: 'Nukkad Meet' },
-      { label: 'Field Demo', value: 'Field Demo' },
-      { label: 'Other', value: 'Other' },
-    ];
+    const combined = [...objectiveOptions];
 
-    if (!tourPlans.length) return staticObjectives;
+    if (!tourPlans.length) return combined;
 
     const dynamicRaw = tourPlans
       .map(p => (p.objectives || '').trim())
@@ -418,7 +429,6 @@ const AttendanceScreen: React.FC<{ navigation: any; route: any }> = ({ navigatio
       .map(s => s.trim())
       .filter(Boolean);
 
-    const combined = [...staticObjectives];
     dynamicList.forEach(obj => {
       if (!combined.some(item => item.value === obj)) {
         combined.push({ label: obj, value: obj });
@@ -434,6 +444,10 @@ const AttendanceScreen: React.FC<{ navigation: any; route: any }> = ({ navigatio
   };
 
   const confirmObjectives = () => {
+    if (tempSelectedObjectives.some(o => o.value === 'Other') && !customObjective.trim()) {
+      Toast.show({ type: 'error', text1: 'Please specify the objective' });
+      return;
+    }
     setSelectedObjectives([...tempSelectedObjectives]);
     objectivesSheetRef.current?.hide();
   };
@@ -525,7 +539,7 @@ const AttendanceScreen: React.FC<{ navigation: any; route: any }> = ({ navigatio
 
       formData.append('punchin_latitude', location.latitude.toFixed(6));
       formData.append('punchin_longitude', location.longitude.toFixed(6));
-      formData.append('type', selectedObjectives.map(o => o.value).join(', '));
+      formData.append('type', selectedObjectives.map(o => o.value === 'Other' ? customObjective.trim() : o.value).join(', '));
       formData.append('city', selectedCities.map((c) => c.label).join(', ')); // ← comma separated
       formData.append('punchin_summary', 'Followed tour plan');
       console.log(formData, 'formDataformData')
@@ -992,9 +1006,13 @@ const AttendanceScreen: React.FC<{ navigation: any; route: any }> = ({ navigatio
             );
           }}
           ListEmptyComponent={
-            <AppText size={15} color="#999" align="center" style={{ marginTop: rw(40) }}>
-              No objectives available
-            </AppText>
+            objectivesLoading ? (
+              <ActivityIndicator color={colors.blue} style={{ marginTop: rw(40) }} />
+            ) : (
+              <AppText size={15} color="#999" align="center" style={{ marginTop: rw(40) }}>
+                No objectives available
+              </AppText>
+            )
           }
         />
 

@@ -161,7 +161,7 @@ const SecondaryCustomerCard: React.FC<SolarCardProps> = ({
       // })
       navigation.navigate('VisitReport', {
         checkin_id: type ? type?.checkin_id :  newCheckInData || item?.last_checkin_id,
-        entity_type: 'secondary_customer',
+        entity_type: 'customer',
         entity_id: item?.id,
         customerData: item, // pass full customer data if needed in report
         latitude: currentLat,
@@ -171,7 +171,7 @@ const SecondaryCustomerCard: React.FC<SolarCardProps> = ({
     } else {
       setCheckInLoading(true)
       const payload = {
-        entity_type: 'secondary_customer',
+        entity_type: 'customer',
         entity_id: item?.id,
         checkin_latitude: currentLat,
         checkin_longitude: currentLng,
@@ -497,17 +497,12 @@ const SecondaryCustomerCard: React.FC<SolarCardProps> = ({
           !type ? ( */}
             <TouchableOpacity style={[styles.addOrderButton, { width: '36%' }]}
               onPress={() => {
-                if (item?.status != "APPROVED") {
-                  Toast.show({
-                    type: 'error',
-                    text1: "Your customer is not approved"
-                  })
-                  return
-                }
                 navigation.navigate("ProductCatalogue", {
                   retailer_id: item?.id,
                   distributor_id: item?.distributor_name,
-                  type: "Retailer"
+                  type: item?.customer_type || item?.type || "Retailer",
+                  customer_type_id: item?.customer_type_id || item?.customertype,
+                  customer_type: item?.customer_type || item?.type,
                 });
               }}>
               <FastImage

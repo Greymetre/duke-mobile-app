@@ -89,6 +89,21 @@ const CustomerCard: React.FC<SolarCardProps> = ({
   const [checkInHandle, setCheckInHanlde] = useState<boolean>(!!item?.last_checkin_date &&
     !item?.last_checkout_date)
   const { mutateAsync: submitCheckIn } = useGetSubmitCheckIN()
+  const customerName =
+    item?.legal_name ||
+    item?.shop_name ||
+    item?.name ||
+    [item?.first_name, item?.last_name].filter(Boolean).join(' ') ||
+    type?.entity_name ||
+    '-';
+  const customerAddress =
+    item?.shipping_address ||
+    item?.address_line ||
+    item?.full_address ||
+    item?.customeraddress?.full_address ||
+    type?.checkin_address ||
+    '-';
+  const shopImage = item?.shop_image || item?.shop_photo;
   function isCheckoutBeforeCheckin(checkinDate: any, checkinTime: any, checkoutDate: any, checkoutTime: any) {
     // Combine date + time into full ISO strings
     const checkinStr = `${checkinDate}T${checkinTime}`;
@@ -379,7 +394,7 @@ const CustomerCard: React.FC<SolarCardProps> = ({
               resizeMode="cover"
             />
             <FastImage
-              source={{ uri: `${IMAGE_BASE_URL}/public/storage/${item?.shop_image}` }}
+              source={{ uri: `${IMAGE_BASE_URL}/public/storage/${shopImage}` }}
               style={styles.mainImage}
               resizeMode="cover"
             />
@@ -418,10 +433,10 @@ const CustomerCard: React.FC<SolarCardProps> = ({
 
       <View style={styles.infoContainer}>
         <Text style={styles.companyName} numberOfLines={2}>
-          {item?.legal_name}
+          {customerName}
         </Text>
         <Text style={styles.address} numberOfLines={2}>
-          {item?.shipping_address}
+          {customerAddress}
         </Text>
       </View>
 
@@ -509,16 +524,17 @@ const CustomerCard: React.FC<SolarCardProps> = ({
         {/* {
           !type ? ( */}
             <TouchableOpacity style={[styles.addOrderButton, { width: '36%' }]} onPress={() => {
-              if (item?.status == "APPROVED") {
-                Toast.show({
-                  type: 'error',
-                  text1: "Your customer is not approved"
-                })
-                return
-              }
+              const customerTypeId = item?.customer_type_id || item?.customertype;
+              const customerTypeName = item?.customer_type || item?.type;
+              const isDistributor =
+                String(customerTypeName || '').toLowerCase().includes('distributor');
               navigation.navigate("ProductCatalogue", {
-                distributor_id: item?.id,
-                type: "Distributor"
+                customer_id: item?.id,
+                retailer_id: isDistributor ? undefined : item?.id,
+                distributor_id: isDistributor ? item?.id : item?.distributor_name,
+                type: customerTypeName || (isDistributor ? "Distributor" : "Retailer"),
+                customer_type_id: customerTypeId,
+                customer_type: customerTypeName,
               });
             }}>
               <FastImage

@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, TextInput, TouchableOpacity, View } from 'react-native';
 import { ArrowDownIcon } from '../../assets/svgs/SvgsFile';
 import AppText from '../../components/AppText/AppText';
 import { styles } from './styles';
@@ -10,6 +10,8 @@ import Toast from 'react-native-toast-message';
 import store from '../../components/redux/Store';
 import { Dropdown } from 'react-native-element-dropdown';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import axiosClient from '../../api/AxiosClient';
+import { API_ENDPOINT } from '../../api/ApiUrls';
 
 
 interface OrderItem {
@@ -29,8 +31,7 @@ const TableHeader = () => (
             Qty
         </AppText>
         <AppText size={14} color="#000000" family='InterSemiBold' width={'20%'} align='center'>
-            Rate{'\n'}
-            <AppText size={10} color="#000000" family='InterSemiBold' width={'20%'} align='center'>(pre GST)</AppText>
+            Rate
         </AppText>
         <AppText size={14} color="#000000" family='InterSemiBold' width={'20%'} align='center'>
             Amount
@@ -128,13 +129,74 @@ const TableRow: React.FC<TableRowProps> = ({ item, onRateChange, onRemove }) => 
 interface DropdownItem {
     label: string;
     value: number | string;
+    customerTypeId?: number | string;
+    customerTypeName?: string;
+    raw?: any;
 }
 
-const customerTypeData = [
-    { label: 'Retailer', value: 'retailer' },
-    { label: 'Distributor', value: 'distributor' },
-];
+interface CustomerTypeOption {
+    label: string;
+    value: number | string;
+    name: string;
+    raw?: any;
+}
 
+const getCustomerLabel = (item: any) =>
+    item?.shop_name ||
+    item?.name ||
+    item?.legal_name ||
+    item?.owner_name ||
+    item?.customer_name ||
+    item?.mobile_number ||
+    `Customer ${item?.id}`;
+
+const getCustomerTypeName = (item: any) =>
+    item?.customer_type ||
+    item?.customertype_name ||
+    item?.customertypes?.customertype_name ||
+    item?.type ||
+    '';
+
+const normalizeCustomerTypes = (payload: any) => {
+    const list =
+        payload?.data?.data ??
+        payload?.data?.customer_types ??
+        payload?.data ??
+        payload?.customer_types ??
+        [];
+
+    return (Array.isArray(list) ? list : []).map((item: any) => {
+        const id = item?.id ?? item?.customer_type_id ?? item?.customertype ?? item?.value;
+        const name = String(
+            item?.customertype_name ??
+            item?.type_name ??
+            item?.type ??
+            item?.customer_type ??
+            item?.name ??
+            item?.title ??
+            ''
+        );
+
+        return {
+            id,
+            name,
+            label: name,
+            value: id,
+            raw: item,
+        };
+    }).filter((item: any) => item?.id && item?.name);
+};
+
+const isSameId = (a?: number | string | null, b?: number | string | null) =>
+    a != null && b != null && String(a) === String(b);
+
+const isRetailerType = (typeId: any, typeName: any, retailerId?: number | string) =>
+    isSameId(typeId, retailerId) || String(typeName || '').toLowerCase().includes('retailer');
+
+const isDistributorOrDealerType = (typeName: any) => {
+    const normalized = String(typeName || '').toLowerCase();
+    return normalized.includes('distributor') || normalized.includes('dealer');
+};
 
 const SubmitOrder = () => {
     const route = useRoute();
@@ -142,42 +204,152 @@ const SubmitOrder = () => {
     const retailerId = routeData?.retailer_id;
     const distributorId = routeData?.distributor_id;
     const type = routeData?.type;
-    const [customerType, setCustomerType] = useState<string | null>(null);
-    const [customerList, setCustomerList] = useState<DropdownItem[]>([]);
-    const [selectedCustomer, setSelectedCustomer] = useState<number | string | null>(null);
+    const routeCustomerTypeId = routeData?.customer_type_id || routeData?.customerTypeId;
+    const routeCustomerId = routeData?.customer_id || routeData?.id;
+    const routeBuyerId = retailerId || routeCustomerId || distributorId || null;
+    const [customerType, setCustomerType] = useState<number | string | null>(null);
     const navigation = useNavigation<NavigationProp<ParamListBase>>();
+    const [customerTypeList, setCustomerTypeList] = useState<CustomerTypeOption[]>([]);
     const [retailerList, setRetailerList] = useState<DropdownItem[]>([]);
     const [distributorList, setDistributorList] = useState<DropdownItem[]>([]);
+    const [customerTypeIds, setCustomerTypeIds] = useState<{ retailer?: number | string; distributor?: number | string }>({});
     const [loader, setLoader] = useState(false);
 
     const [selectedRetailer, setSelectedRetailer] = useState<number | string | null>(null);
+    const [selectedCustomerTypeId, setSelectedCustomerTypeId] = useState<number | string | null>(routeCustomerTypeId || null);
+    const [selectedCustomerTypeName, setSelectedCustomerTypeName] = useState<string>(type || routeData?.customer_type || '');
     const [selectedDistributor, setSelectedDistributor] = useState<number | string | null>(null);
     const [remark, setRemark] = useState('');
 
 
     const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
 
-    useEffect(() => {
-        if (type === 'Retailer') {
-            setCustomerType('retailer');
-            setSelectedRetailer(retailerId);
-            fetchRetailers();
-            fetchDistributors();
+    const selectedCustomerIsRetailer = isRetailerType(
+        selectedCustomerTypeId,
+        selectedCustomerTypeName,
+        customerTypeIds.retailer
+    );
+
+    const fetchCustomerTypes = useCallback(async () => {
+        try {
+            const res = await axiosClient.get(API_ENDPOINT.GET_CUSTOMER_TYPE_LIST);
+            const types = normalizeCustomerTypes(res?.data);
+            const retailer = types.find((item: any) => item.name.toLowerCase().includes('retailer'));
+            const distributor = types.find((item: any) => item.name.toLowerCase().includes('distributor'));
+            const routeType =
+                types.find((item: any) => isSameId(item.value, routeCustomerTypeId)) ||
+                types.find((item: any) => String(type || routeData?.customer_type || '').toLowerCase() === item.name.toLowerCase());
+
+            setCustomerTypeList(types);
+            setCustomerTypeIds({
+                retailer: retailer?.id,
+                distributor: distributor?.id,
+            });
+
+            if (routeType) {
+                setCustomerType(routeType.value);
+                setSelectedCustomerTypeId(routeType.value);
+                setSelectedCustomerTypeName(routeType.name);
+                return;
+            }
+
+            setCustomerType(null);
+            setSelectedCustomerTypeId(null);
+            setSelectedCustomerTypeName('');
+        } catch (error) {
+            console.log('Customer type list error', error);
         }
+    }, [routeCustomerTypeId, routeData?.customer_type, type]);
 
-        if (type === 'Distributor') {
-            setCustomerType('distributor');
-            setSelectedDistributor(Number(distributorId))
-            fetchDistributors();
+    const getCustomersByType = useCallback(async (customerTypeId?: number | string) => {
+        if (!customerTypeId) return [];
+        try {
+            const res = await axiosClient.get(API_ENDPOINT.GET_CUSTOMER_LIST, {
+                params: {
+                    customer_type_id: customerTypeId,
+                    pageSize: 100,
+                    page: 1,
+                },
+            });
+
+            const listPayload = res?.data?.data;
+            const list = Array.isArray(listPayload) ? listPayload : (listPayload?.data || []);
+            const formatted = list?.map((item: any) => ({
+                label: getCustomerLabel(item),
+                value: item?.customer_id || item?.id,
+                customerTypeId: item?.customer_type_id || item?.customertype,
+                customerTypeName: getCustomerTypeName(item),
+                raw: item,
+            }));
+
+            return formatted || [];
+        } catch (error) {
+            console.log('Customer list error', error);
+            return [];
         }
-
-        setCustomerType('retailer');
-
-        setSelectedRetailer(null);
-        setSelectedDistributor(null);
-        fetchRetailers();
-
     }, []);
+
+    const fetchCustomersForSelectedType = useCallback(async (customerTypeId?: number | string) => {
+        const formatted = await getCustomersByType(customerTypeId);
+        setRetailerList(formatted);
+
+        if (routeBuyerId && (!routeCustomerTypeId || isSameId(customerTypeId, routeCustomerTypeId))) {
+            setSelectedRetailer(routeBuyerId);
+        }
+    }, [getCustomersByType, routeBuyerId, routeCustomerTypeId]);
+
+    const fetchDistributorDealerOptions = useCallback(async () => {
+        const sellerTypeIds = customerTypeList
+            .filter((item) => isDistributorOrDealerType(item.name))
+            .map((item) => item.value);
+
+        if (!sellerTypeIds.length) {
+            setDistributorList([]);
+            return;
+        }
+
+        const responses = await Promise.all(sellerTypeIds.map((typeId) => getCustomersByType(typeId)));
+        const seen = new Set<string>();
+        const merged = responses.flat().filter((item) => {
+            const key = String(item.value);
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+
+        setDistributorList(merged);
+        if (distributorId) {
+            setSelectedDistributor(Number(distributorId));
+        }
+    }, [customerTypeList, distributorId, getCustomersByType]);
+
+    useEffect(() => {
+        fetchCustomerTypes();
+    }, [fetchCustomerTypes]);
+
+    useEffect(() => {
+        if (!selectedCustomerTypeId) {
+            setRetailerList([]);
+            setDistributorList([]);
+            setSelectedRetailer(null);
+            setSelectedDistributor(null);
+            return;
+        }
+
+        setCustomerType(selectedCustomerTypeId);
+        fetchCustomersForSelectedType(selectedCustomerTypeId);
+        if (selectedCustomerIsRetailer) {
+            fetchDistributorDealerOptions();
+        } else {
+            setDistributorList([]);
+            setSelectedDistributor(null);
+        }
+    }, [
+        fetchCustomersForSelectedType,
+        fetchDistributorDealerOptions,
+        selectedCustomerTypeId,
+        selectedCustomerIsRetailer,
+    ]);
 
     useEffect(() => {
         if (cartItems?.length) {
@@ -196,66 +368,6 @@ const SubmitOrder = () => {
         }
     }, [cartItems]);
 
-
-    const fetchRetailers = async () => {
-        const token = store.getState().auth?.token;
-
-        try {
-            const res = await fetch(
-                'https://duke.fieldkonnect.in/api/order/secondary-customers',
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        Accept: 'application/json',
-                    },
-                }
-            );
-
-            const json = await res.json();
-
-            const formatted = json?.data?.map((item: any) => ({
-                label: item.shop_name,
-                value: item.id,
-            }));
-
-            setRetailerList(formatted || []);
-            if (retailerId) {
-                setSelectedRetailer(retailerId);
-            }
-
-        } catch (error) {
-            console.log('Retailer error', error);
-        }
-    };
-    const fetchDistributors = async () => {
-        const token = store.getState().auth?.token;
-
-        try {
-            const res = await fetch(
-                'https://duke.fieldkonnect.in/api/order/distributors',
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                    },
-                }
-            );
-
-            const json = await res.json();
-
-            const formatted = json?.data?.map((item: any) => ({
-                label: `${item.distributor_code} - ${item.legal_name}`,
-                value: item.id,
-            }));
-
-            setDistributorList(formatted || []);
-            if (distributorId) {
-                console.log(distributorId, 'distributorId');
-                setSelectedDistributor(Number(distributorId));
-            }
-        } catch (error) {
-            console.log('Distributor error', error);
-        }
-    };
     const totalOrderValue = orderItems.reduce((sum, item) => {
         return sum + item.amount;
     }, 0);
@@ -291,7 +403,7 @@ const SubmitOrder = () => {
         });
 
         return unsubscribe;
-    }, [orderItems]);
+    }, [navigation, orderItems, updateCart]);
 
 
     const submitOrder = async () => {
@@ -304,7 +416,7 @@ const SubmitOrder = () => {
             });
             return;
         }
-        if (orderItems.length == 0 && orderItems) {
+        if (orderItems.length === 0 && orderItems) {
             Toast.show({
                 type: 'error',
                 text1: 'Please select any order',
@@ -327,15 +439,15 @@ const SubmitOrder = () => {
             return;
         }
 
-        if (customerType === 'retailer' && !selectedRetailer) {
+        if (!selectedRetailer) {
             Toast.show({
                 type: 'error',
-                text1: 'Please select retailer',
+                text1: 'Please select customer',
             });
             return;
         }
 
-        if (!selectedDistributor) {
+        if (selectedCustomerIsRetailer && !selectedDistributor) {
             Toast.show({
                 type: 'error',
                 text1: 'Please select distributor',
@@ -358,10 +470,12 @@ const SubmitOrder = () => {
                 line_total: item.amount,
             }));
 
+            const sellerId = selectedCustomerIsRetailer ? selectedDistributor : selectedRetailer;
+
             // ✅ Payload
             const body = {
-                buyer_id: customerType === 'retailer' ? selectedRetailer : null,
-                seller_id: selectedDistributor,
+                buyer_id: selectedRetailer,
+                seller_id: sellerId,
                 remark: remark || "NA",
                 orderdetail: orderdetail,
             };
@@ -421,43 +535,37 @@ const SubmitOrder = () => {
 
             >
 
-                {/* <View style={[styles.row, { gap: 10, marginVertical: 20 }]}>
+                <View style={[styles.row, { gap: 10, marginVertical: 20 }]}>
                     <View style={{ flex: 1, gap: 10 }}>
                         <Dropdown
                             style={styles.selectUser}
                             placeholderStyle={{ color: '#718096', fontSize: 14 }}
                             selectedTextStyle={{ color: colors.black, fontSize: 14 }}
                             inputSearchStyle={{ height: 40, fontSize: 14 }}
-                            data={customerTypeData}
+                            data={customerTypeList}
                             search
                             maxHeight={300}
                             labelField="label"
                             valueField="value"
-                            placeholder="Select Customer"
-                            searchPlaceholder="Select Customer..."
+                            placeholder="Select Customer Type"
+                            searchPlaceholder="Select Customer Type..."
                             value={customerType}
                             onChange={(item) => {
                                 setCustomerType(item.value);
-
+                                setSelectedCustomerTypeId(item.value);
+                                setSelectedCustomerTypeName(item.name || item.label);
                                 setSelectedRetailer(null);
                                 setSelectedDistributor(null);
-
-                                if (item.value === 'retailer') {
-                                    fetchRetailers();
-                                }
-
-                                if (item.value === 'distributor') {
-                                    fetchDistributors();
-                                }
                             }}
                             renderRightIcon={() => <ArrowDownIcon />}
                         />
 
                     </View>
-                </View> */}
+                </View>
 
 
-                <View style={{ flex: 1, marginVertical: 20 }}>
+                {selectedCustomerTypeId && (
+                <View style={{ flex: 1, marginBottom: 20 }}>
                     <Dropdown
                         style={styles.selectUser}
                         placeholderStyle={{ color: '#718096', fontSize: 14 }}
@@ -468,23 +576,24 @@ const SubmitOrder = () => {
                         maxHeight={300}
                         labelField="label"
                         valueField="value"
-                        placeholder="Select Retailer"
-                        searchPlaceholder={"Select Retailer"}
+                        placeholder={`Select ${selectedCustomerTypeName || 'Customer'}`}
+                        searchPlaceholder={`Select ${selectedCustomerTypeName || 'Customer'}`}
                         value={selectedRetailer}
                         onChange={(item) => {
                             setSelectedRetailer(item.value);
-
-                            fetchDistributors();
+                            setSelectedCustomerTypeId(item.customerTypeId || selectedCustomerTypeId);
+                            setSelectedCustomerTypeName(item.customerTypeName || selectedCustomerTypeName);
+                            setSelectedDistributor(null);
                         }}
                         renderRightIcon={() => <ArrowDownIcon />}
                     />
 
                 </View>
+                )}
 
 
-                {((customerType === 'retailer' && selectedRetailer) || customerType === 'distributor') && (
-
-                    <View style={{ flex: 1 }}>
+                {selectedCustomerIsRetailer && (
+                    <View style={{ flex: 1, marginTop: 0 }}>
                         <Dropdown
                             style={styles.selectUser}
                             placeholderStyle={{ color: '#718096', fontSize: 14 }}
@@ -495,8 +604,8 @@ const SubmitOrder = () => {
                             maxHeight={300}
                             labelField="label"
                             valueField="value"
-                            placeholder="Select Distributor"
-                            searchPlaceholder={"Select Distributor"}
+                            placeholder="Select Distributor / Dealer"
+                            searchPlaceholder={"Select Distributor / Dealer"}
                             value={selectedDistributor}
                             onChange={(item) => {
                                 setSelectedDistributor(item.value);
@@ -505,8 +614,7 @@ const SubmitOrder = () => {
                         />
 
                     </View>
-                )
-                }
+                )}
 
                 <View style={styles.tableContainers}>
                     <TableHeader />
@@ -541,11 +649,6 @@ const SubmitOrder = () => {
                         </AppText>
                         <AppText size={16} color={colors.blue} family="InterBold" horizontal={20}>
                             {totalOrderValue.toFixed(2)}
-                        </AppText>
-                    </View>
-                    <View style={{ top: -10 }}>
-                        <AppText size={12} color={'#333333'} family={'InterRegular'}>
-                            (pre GST Value)
                         </AppText>
                     </View>
                 </View>

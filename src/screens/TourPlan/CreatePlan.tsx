@@ -24,6 +24,7 @@ import { SCREEN_HEIGHT } from '../../utils/misc';
 import { fonts } from '../../utils/typography';
 import ActionSheet, { ActionSheetRef } from 'react-native-actions-sheet';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { getTourObjectivesApi, normalizeTourObjectives } from '../../api/query/TourPlanApi';
 
 // ────────────────────────────────────────────────
 // Types
@@ -98,6 +99,8 @@ const CreatePlan: React.FC = ({ navigation, route }: any) => {
   const [sheetRowId, setSheetRowId] = useState<string | null>(null);
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [otherText, setOtherText] = useState('');
+  const [objectiveOptions, setObjectiveOptions] = useState<DropdownItem[]>([]);
+  const [objectivesLoading, setObjectivesLoading] = useState(false);
 
   // ────────────────────────────────────────────────
   // Fetch users & districts on mount
@@ -106,7 +109,21 @@ const CreatePlan: React.FC = ({ navigation, route }: any) => {
   useEffect(() => {
     fetchUsers();
     fetchDistricts();
+    fetchObjectives();
   }, []);
+
+  const fetchObjectives = async () => {
+    try {
+      setObjectivesLoading(true);
+      const res = await getTourObjectivesApi();
+      setObjectiveOptions(normalizeTourObjectives(res?.data));
+    } catch (error) {
+      console.log('Tour objectives error:', error);
+      Toast.show({ type: 'error', text1: 'Failed to load objectives' });
+    } finally {
+      setObjectivesLoading(false);
+    }
+  };
 
   const fetchUsers = async () => {
     const token = store.getState().auth?.token;
@@ -301,7 +318,7 @@ const CreatePlan: React.FC = ({ navigation, route }: any) => {
 
     const parts = current.split(',').map(s => s.trim()).filter(Boolean);
 
-    const fixedOptions = ['Retailer Visit', 'Retailer Meet', 'Nukkad Meet', 'Field Demo', 'Other'];
+    const fixedOptions = objectiveOptions.map(item => item.label);
 
     // 1. Find which of the fixed options are selected
     const preSelected = fixedOptions.filter(opt => parts.includes(opt));
@@ -310,12 +327,10 @@ const CreatePlan: React.FC = ({ navigation, route }: any) => {
     const customParts = parts.filter(p => !fixedOptions.includes(p));
 
     // If there is any custom text OR "Other" is explicitly present → we consider "Other" selected
-    const hasOther = preSelected.includes('Other') || customParts.length > 0;
-
     let finalSelected = preSelected;
 
     // If we have custom text but "Other" is not in the list → add it
-    if (customParts.length > 0 && !finalSelected.includes('Other')) {
+    if (customParts.length > 0 && !finalSelected.includes('Other') && fixedOptions.includes('Other')) {
       finalSelected = [...finalSelected, 'Other'];
     }
 
@@ -982,7 +997,15 @@ const CreatePlan: React.FC = ({ navigation, route }: any) => {
           </AppText>
 
           <ScrollView style={{ maxHeight: 340 }}>
-            {['Retailer Visit', 'Retailer Meet', 'Nukkad Meet', 'Field Demo', 'Other'].map(opt => (
+            {objectivesLoading ? (
+              <ActivityIndicator color={colors.blue} />
+            ) : objectiveOptions.length === 0 ? (
+              <AppText size={15} color="#999" align="center" style={{ marginTop: 20 }}>
+                No objectives available
+              </AppText>
+            ) : objectiveOptions.map(option => {
+              const opt = option.label;
+              return (
               <TouchableOpacity
                 key={opt}
                 activeOpacity={0.7}
@@ -1017,7 +1040,8 @@ const CreatePlan: React.FC = ({ navigation, route }: any) => {
                   {opt}
                 </AppText>
               </TouchableOpacity>
-            ))}
+              );
+            })}
 
             {selectedOptions.includes('Other') && (
               <View

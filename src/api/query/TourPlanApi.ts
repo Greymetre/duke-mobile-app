@@ -12,6 +12,29 @@ export const useMutateTourPlanApi = () => {
     });
 };
 
+export const getTourObjectivesApi = () =>
+  axiosClient.get(API_ENDPOINT.TOUR_OBJECTIVES);
+
+export const normalizeTourObjectives = (payload: any) => {
+  const list =
+    payload?.data?.data ??
+    payload?.data?.objectives ??
+    payload?.objectives ??
+    payload?.data ??
+    [];
+
+  return (Array.isArray(list) ? list : []).map((item: any) => {
+    const label = typeof item === 'string'
+      ? item
+      : item?.label || item?.name || item?.objective || item?.title || item?.objective_name;
+
+    return {
+      label,
+      value: label,
+    };
+  }).filter((item: any) => item.label && item.value);
+};
+
 
 export const useMutateTourPlanSelectApi = () => {
     return useMutation({

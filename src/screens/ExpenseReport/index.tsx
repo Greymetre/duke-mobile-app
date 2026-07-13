@@ -1,204 +1,421 @@
-import { View, Text, ScrollView, FlatList, Pressable, Modal } from 'react-native'
-import React, { useCallback, useState } from 'react'
-import { styles } from './styles'
-import { rw } from '../../utils/responsive'
-import AppText from '../../components/AppText/AppText'
-import { ArrowDownIcon, CalenderIcon, CrossIcon, EyeballIcon, LOcationIcon, PlusAddIcon, ThreeDotIcon } from '../../assets/svgs/SvgsFile'
-import { colors } from '../../utils/Colors'
-import { shadowStyle } from '../../utils/typography'
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, View } from 'react-native';
+import { Dropdown } from 'react-native-element-dropdown';
+import AppText from '../../components/AppText/AppText';
+import { ArrowDownIcon, CalenderIcon, PlusAddIcon } from '../../assets/svgs/SvgsFile';
+import { colors } from '../../utils/Colors';
+import { rw } from '../../utils/responsive';
+import { shadowStyle } from '../../utils/typography';
+import { getAllExpensesApi, getMyExpensesApi } from '../../api/query/ExpenseApi';
+import CustomerCalendar from '../../components/CustomCalendar/CalendarPopupView';
+import { styles } from './styles';
 
-const ExpenseReport = ({navigation}:any) => {
-  const [isModalVisible, setIsModalVisible] = useState(false);
-  const listData = [
-    { id: 1, name: "Mr. B Varlaxmi" },
-    { id: 2, name: "Piyush Patel" },
-    { id: 3, name: "Abhishek Soni" },
-    { id: 4, name: "Ajay Tomar" },
-    { id: 5, name: "Ramniwas Vishnoi" },
-    { id: 6, name: "Chan Singh" },
-  ]
+const STATUS_OPTIONS = [
+  { label: 'All', value: '' },
+  { label: 'Pending', value: 0 },
+  { label: 'Approved', value: 1 },
+  { label: 'Rejected', value: 2 },
+  { label: 'Checked', value: 3 },
+  { label: 'Approved', value: 4 },
+];
 
-  const renderItem: any = useCallback((item: any) => {
-    console.log(item, 'indexindex')
-    const itemD = item?.item
-    const index = item?.index
-    return (
-      <View style={[styles.listItem, shadowStyle]}>
-        <View style={[styles.row, { justifyContent: 'space-between' }]}>
-          <View style={{width:'48%'}}>
-            <AppText color='black' family='InterSemiBold' size={16}>{itemD?.name}</AppText>
-            <AppText color='#888888' family='InterMedium' size={13}>#273252</AppText>
-          </View>
-           <View style={{width:'48%',alignItems:'flex-end'}}>
-            <AppText color='#395299' family='InterBold' size={18}>₹ 250.00</AppText>
-            <AppText color='#395299' family='InterSemiBold' size={14}>Bike</AppText>
-          </View>
+const SUMMARY_STATUS_OPTIONS = [
+  { label: 'All', value: '' },
+  { label: 'Pending', value: 0 },
+  { label: 'Approved', value: 4 },
+  { label: 'Rejected', value: 2 },
+];
 
+const statusLabel = (status: any) => {
+  const option = STATUS_OPTIONS.find(item => String(item.value) === String(status));
+  return option?.label || status || 'Pending';
+};
+
+const statusColor = (status: any) => {
+  if (isApprovedStatus(status)) return '#1E8E3E';
+  if (String(status) === '2' || String(status).toLowerCase() === 'rejected') return '#D93025';
+  return '#D98324';
+};
+
+const formatAmount = (amount: any) => Number(amount || 0).toFixed(2);
+
+const getExpenseStatus = (item: any) => item?.checker_status ?? item?.status ?? 0;
+
+const normalizeStatusText = (status: any) => String(status ?? '').trim().toLowerCase();
+
+const isPendingStatus = (status: any) => {
+  const value = normalizeStatusText(status);
+  return value === '' || value === '0' || value === 'pending';
+};
+
+const isApprovedStatus = (status: any) => {
+  const value = normalizeStatusText(status);
+  return value === '1' || value === '4' || value === 'approved' || value === 'checked by reporting';
+};
+
+const isRejectedStatus = (status: any) => {
+  const value = normalizeStatusText(status);
+  return value === '2' || value === 'rejected';
+};
+
+const matchesSummaryStatus = (status: any, value: any) => {
+  if (value === '') return true;
+  if (String(value) === '0') return isPendingStatus(status);
+  if (String(value) === '1' || String(value) === '4') return isApprovedStatus(status);
+  if (String(value) === '2') return isRejectedStatus(status);
+  return String(status) === String(value);
+};
+
+const getExpenseAmount = (item: any) => {
+  const currentStatus = getExpenseStatus(item);
+  if (isApprovedStatus(currentStatus)) {
+    return Number(item?.approve_amount ?? item?.claim_amount ?? 0);
+  }
+  return Number(item?.claim_amount || 0);
+};
+
+const displayValue = (value: any, fallback = '—') =>
+  value === null || value === undefined || value === '' ? fallback : value;
+
+const formatDate = (date: any) => {
+  if (!date || typeof date !== 'string') return 'NA';
+  const [year, month, day] = date.split('-');
+  if (!year || !month || !day) return date;
+  return `${day}-${month}-${year}`;
+};
+
+const formatYYYYMMDD = (date: Date | null) => {
+  if (!date) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getExpenseImageCount = (item: any) => {
+  const images = item?.expense_image;
+  if (Array.isArray(images)) return images.length || 'NA';
+  return images ? 1 : 'NA';
+};
+
+const ExpenseInfoCell = ({ label, value, color = '#202432' }: any) => (
+  <View style={styles.expenseInfoCell}>
+    <AppText size={13} color="#9094A3" family="InterSemiBold" numLines={1}>
+      {label}
+    </AppText>
+    <AppText size={15} color={color} family="InterBold" numLines={1}>
+      {value}
+    </AppText>
+  </View>
+);
+
+const ExpenseReport = ({ navigation }: any) => {
+  const [mode, setMode] = useState<'my' | 'approval'>('my');
+  const [status, setStatus] = useState<any>('');
+  const [expenses, setExpenses] = useState<any[]>([]);
+  const [approvalSummaryExpenses, setApprovalSummaryExpenses] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [selectedUser, setSelectedUser] = useState<any>('');
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [showCal, setShowCal] = useState(false);
+  const [rangeType, setRangeType] = useState('currentMonth');
+  const [startDate, setStartDate] = useState<Date>(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  const [endDate, setEndDate] = useState<Date>(() => new Date());
+
+  const userOptions = useMemo(() => {
+    const normalized = users.map((item: any) => ({
+      label: item?.name || item?.user_name || item?.label || `User ${item?.id || item?.user_id}`,
+      value: item?.id || item?.user_id || item?.value,
+    })).filter(item => item.value);
+
+    return [{ label: 'All Users', value: '' }, ...normalized];
+  }, [users]);
+
+  const approvalSummary = useMemo(() => {
+    return SUMMARY_STATUS_OPTIONS.map((option) => {
+      const list = option.value === ''
+        ? approvalSummaryExpenses
+        : approvalSummaryExpenses.filter((item) => matchesSummaryStatus(getExpenseStatus(item), option.value));
+
+      const amount = list.reduce((sum, item) => sum + getExpenseAmount(item), 0);
+
+      return {
+        ...option,
+        count: list.length,
+        amount,
+      };
+    });
+  }, [approvalSummaryExpenses]);
+
+  const fetchExpenses = useCallback(async (isRefresh = false) => {
+    try {
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+
+      const params: any = {
+        pageSize: 100,
+      };
+      if (status !== '') params.status = status;
+      if (mode === 'approval') {
+        if (selectedUser) params.user_id = selectedUser;
+        if (startDate && endDate) {
+          params.start_date = formatYYYYMMDD(startDate);
+          params.end_date = formatYYYYMMDD(endDate);
+        }
+      }
+
+      const res = mode === 'approval'
+        ? await getAllExpensesApi(params)
+        : await getMyExpensesApi(params);
+
+      const payload = res?.data || {};
+      const listPayload = payload?.data;
+      const list = Array.isArray(listPayload) ? listPayload : (listPayload?.data || []);
+
+      setExpenses(list || []);
+      if (mode === 'approval') {
+        setUsers(payload?.users || []);
+      }
+    } catch (error: any) {
+      console.log('Expense listing error:', error?.response || error);
+      setExpenses([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [endDate, mode, selectedUser, startDate, status]);
+
+  useEffect(() => {
+    fetchExpenses();
+  }, [fetchExpenses]);
+
+  const fetchApprovalSummary = useCallback(async () => {
+    if (mode !== 'approval') {
+      setApprovalSummaryExpenses([]);
+      return;
+    }
+
+    try {
+      const params: any = { pageSize: 100 };
+      if (selectedUser) params.user_id = selectedUser;
+      if (startDate && endDate) {
+        params.start_date = formatYYYYMMDD(startDate);
+        params.end_date = formatYYYYMMDD(endDate);
+      }
+      const res = await getAllExpensesApi(params);
+      const payload = res?.data || {};
+      const listPayload = payload?.data;
+      const list = Array.isArray(listPayload) ? listPayload : (listPayload?.data || []);
+      setApprovalSummaryExpenses(list || []);
+      setUsers(payload?.users || []);
+    } catch (error: any) {
+      console.log('Expense summary error:', error?.response || error);
+      setApprovalSummaryExpenses([]);
+    }
+  }, [endDate, mode, selectedUser, startDate]);
+
+  useEffect(() => {
+    fetchApprovalSummary();
+  }, [fetchApprovalSummary]);
+
+  const handleApplyDateRange = (start: Date | null, end: Date | null, type: string) => {
+    if (start) setStartDate(start);
+    if (end) setEndDate(end);
+    setRangeType(type || 'custom');
+    setShowCal(false);
+  };
+
+  const renderExpenseCard = ({ item }: any) => (
+    <Pressable
+      style={[styles.expenseCard, shadowStyle]}
+      onPress={() => navigation.navigate('ExpenseDetails', { expense: item, mode })}
+    >
+      <View style={styles.expenseCardHeader}>
+        <View style={styles.expenseTitleBlock}>
+          <AppText color="#202432" family="InterBold" size={18} numLines={1}>
+            {item?.expenses_type_name || item?.expenses_type || 'Expense'}
+          </AppText>
+          <AppText color="#9094A3" family="InterSemiBold" size={14} numLines={1}>
+            {item?.user_name || item?.name || 'My Expense'} · #{item?.id}
+          </AppText>
         </View>
-        <View style={styles.line} />
-        <View style={[styles.row, { flex: 1, justifyContent: 'space-between', gap: 30 }]}>
-          <View style={styles.firstPunchIN}>
-            <AppText color='#888888' family='InterRegular' size={13}>Date</AppText>
-            <AppText color='black' family='InterSemiBold' size={14}>17 Nov 2025</AppText>
-          </View>
-          <View style={styles.firstPunchIN}>
-            <AppText color='#888888' family='InterRegular' size={13}>Attachments</AppText>
-            <AppText color='black' family='InterSemiBold' size={14}>NA</AppText>
-          </View>
-          <View style={styles.firstPunchIN}>
-            <AppText color='#888888' family='InterRegular' size={13}>Status</AppText>
-            <AppText color='#E78422' family='InterSemiBold' size={14}>Pending</AppText>
-          </View>
+        <View style={styles.expenseIdBlock}>
+          <AppText color="#9094A3" family="InterSemiBold" size={13}>
+            Expense Id
+          </AppText>
+          <AppText color="#333F82" family="InterBold" size={18}>
+            #{item?.id}
+          </AppText>
         </View>
       </View>
-    )
-  }, [listData])
+
+      <View style={styles.expenseDivider} />
+
+      <View style={styles.expenseGrid}>
+        <ExpenseInfoCell label="Date" value={formatDate(item?.date)} />
+        <ExpenseInfoCell label="Attachment" value={getExpenseImageCount(item)} />
+        <ExpenseInfoCell
+          label="Status"
+          value={statusLabel(getExpenseStatus(item))}
+          color={statusColor(getExpenseStatus(item))}
+        />
+        <ExpenseInfoCell label="Rate" value={displayValue(item?.rate ? `₹ ${formatAmount(item?.rate)}` : item?.rate)} />
+        <ExpenseInfoCell label="Claim Amt" value={`₹ ${formatAmount(item?.claim_amount)}`} />
+        <ExpenseInfoCell
+          label="Approve Amt"
+          value={item?.approve_amount ? `₹ ${formatAmount(item?.approve_amount)}` : '—'}
+          color={item?.approve_amount ? '#202432' : '#1E8E3E'}
+        />
+      </View>
+
+      <View style={styles.expenseActionRow}>
+        <Pressable
+          style={styles.expenseViewButton}
+          onPress={() => navigation.navigate('ExpenseDetails', { expense: item, mode })}
+        >
+          <AppText size={15} color="#333F82" family="InterBold">View</AppText>
+          <AppText size={20} color="#333F82" family="InterBold">›</AppText>
+        </Pressable>
+      </View>
+    </Pressable>
+  );
+
   return (
     <View style={styles.container}>
-      <ScrollView style={[styles.container, { paddingHorizontal: rw(18) }]} >
-        <View style={[styles.row, { gap: 13, marginTop: 15 }]}>
-          <View style={[styles.UserBox, styles.row]}>
-            <View style={{  justifyContent: 'center', }}>
-              <AppText size={14} color='#718096' family='InterRegular'>User</AppText>
-            </View>
-            <ArrowDownIcon />
-          </View>
-          <View style={[styles.UserBox, styles.row]}>
-            <View style={{  justifyContent: 'center', }}>
-              <AppText size={14} color='#718096' family='InterRegular'>Status</AppText>
-            </View>
-            <ArrowDownIcon />
-          </View>
-        </View>
-        <View style={[styles.dateTimeBox, styles.row,{justifyContent:'space-between'}]}>
-          <View style={{  justifyContent: 'center', }}>
-            <AppText size={14} color='#718096' family='InterRegular'>AUG 2024 - AUG 2025</AppText>
-          </View>
-          <View style={[styles.calenderICon, styles.center]}>
-            <CalenderIcon size={16} color={colors.blue} />
-          </View>
-        </View>
-
-        <FlatList
-          data={listData}
-          keyExtractor={(item) => item?.id.toString()}
-          renderItem={renderItem}
-          style={{ marginTop: 20 }}
-          ListFooterComponent={() => (
-            <View style={{ height: 120 }} />
-          )} />
-      </ScrollView>
+      <View style={{ paddingHorizontal: rw(18), paddingTop: 15 }}>
+        <View style={[styles.row, { gap: 10 }]}>
           <Pressable
-                style={styles.fab}
-                onPress={() => navigation.navigate("ProductCatalogue")}
-            >
-                <PlusAddIcon color={'white'} />
-            </Pressable>
-      <Modal visible={isModalVisible} style={{ flex: 1, }} transparent={true} animationType='fade'>
-        <View style={[styles.modalcontainer, styles.center]}>
-          <View style={[styles.modalheader, styles.center]}>
-            <AppText size={16} color='white' family='InterSemiBold'>Attendance Detail</AppText>
-            <Pressable style={{ position: "absolute", right: 15 }} onPress={() => setIsModalVisible(false)}>
-              <CrossIcon />
-            </Pressable>
-          </View>
-          <View style={styles.mainOCntainer}>
-            <View style={[styles.row, { gap: 21 }]}>
-              <View style={styles.firstViewModal}>
-                <AppText size={14} family='InterMedium' color='#333333'>User Id</AppText>
-                <AppText size={14} family='InterBold' color='black'>41880</AppText>
-              </View>
-              <View style={[styles.firstViewModal, { flex: 0.45 }]}>
-                <AppText size={14} family='InterMedium' color='#333333'>Employe Code</AppText>
-                <AppText size={14} family='InterBold' color='black'>G0038</AppText>
-              </View>
-            </View>
-            <View style={[styles.row, { gap: 21, marginTop: 15 }]}>
-              <View style={styles.firstViewModal}>
-                <AppText size={14} family='InterMedium' color='#333333'>Punch In Date</AppText>
-                <AppText size={14} family='InterBold' color='black'>18 NOV 2025</AppText>
-              </View>
-              <View style={[styles.firstViewModal, { flex: 0.45 }]}>
-                <AppText size={14} family='InterMedium' color='#333333'>Punch In Time</AppText>
-                <AppText size={14} family='InterBold' color='black'>10:03 AM</AppText>
-              </View>
-            </View>
-            <View style={[styles.row, { gap: 21, marginTop: 15 }]}>
-              <View style={styles.firstViewModal}>
-                <AppText size={14} family='InterMedium' color='#333333'>Punch Out Time</AppText>
-                <AppText size={14} family='InterBold' color='black'>07:30 PM</AppText>
-              </View>
-              <View style={[styles.firstViewModal, { flex: 0.45 }]}>
-                <AppText size={14} family='InterMedium' color='#333333'>Working Time</AppText>
-                <AppText size={14} family='InterBold' color='black'>8:00 Hrs</AppText>
-              </View>
-            </View>
-            <View style={[styles.row, { gap: 21, marginTop: 15 }]}>
-              <View style={styles.firstViewModal}>
-                <AppText size={14} family='InterMedium' color='#333333'>Punch Out Time</AppText>
-                <AppText size={14} family='InterBold' color='black'>07:30 PM</AppText>
-              </View>
-              <View style={[styles.firstViewModal, { flex: 0.45 }]}>
-                <AppText size={14} family='InterMedium' color='#333333'>Working Time</AppText>
-                <AppText size={14} family='InterBold' color='black'>18:00 Hrs</AppText>
-              </View>
-            </View>
-            <View style={[styles.row, { gap: 21, marginTop: 15 }]}>
-              <View style={styles.firstViewModal}>
-                <AppText size={14} family='InterMedium' color='#333333'>Working Type</AppText>
-                <AppText size={14} family='InterBold' color='black'>Office Meeting</AppText>
-              </View>
-              <View style={[styles.firstViewModal, { flex: 0.45 }]}>
-                <AppText size={14} family='InterMedium' color='#333333'>Punch In Location</AppText>
-                <View style={[styles.row, { gap: 5 }]}>
-                  <LOcationIcon />
-                  <AppText size={14} family='InterMedium' color={colors.blue}>Indore</AppText>
-                </View>
-              </View>
-            </View>
-            <View style={[styles.row, { gap: 21, marginTop: 15 }]}>
-              <View style={[styles.firstViewModal]}>
-                <AppText size={14} family='InterMedium' color='#333333'>Punch Out Location</AppText>
-                <View style={[styles.row, { gap: 5 }]}>
-                  <LOcationIcon />
-                  <AppText size={14} family='InterMedium' color={colors.blue}>Indore</AppText>
-                </View>
-              </View>
-            </View>
-            <View style={[styles.row, { gap: 21, marginTop: 15 }]}>
-              <View style={[styles.firstViewModal]}>
-                <AppText size={14} family='InterMedium' color='#333333'>Punch In Summary</AppText>
-                <AppText size={14} family='InterBold' color='black'>Office</AppText>
-              </View>
-            </View>
-            <View style={[styles.row, { gap: 21, marginTop: 15 }]}>
-              <View style={[styles.firstViewModal, { flex: 1 }]}>
-                <AppText size={14} family='InterMedium' color='#333333'>Punch In Address</AppText>
-                <AppText size={14} family='InterBold' color='black'>Vijay Vatika, Indore, MP, India</AppText>
-              </View>
-            </View>
-            <View style={[styles.approveRejectView, styles.row, { gap: 20 }]}>
-              <View style={[styles.approveView, styles.row]}>
-                <View style={[styles.circle, styles.center]}>
-                  <View style={styles.circleInner} />
-                </View>
-                <AppText size={14} color='#339D4F' family='InterRegular'>Approve</AppText>
-              </View>
-              <View style={[styles.approveView, styles.row]}>
-                <View style={[styles.circle, styles.center, { borderColor: "#FF3333" }]}>
-                  <View style={[styles.circleInner, { backgroundColor: "#FF3333" }]} />
-                </View>
-                <AppText size={14} color='#FF3333' family='InterRegular'>Reject</AppText>
-              </View>
-            </View>
-            <Pressable style={[styles.submit, { height: 44 }, styles.center]} onPress={() => setIsModalVisible(false)}>
-              <AppText size={16} color='white' family='InterBold'>Submit</AppText>
-            </Pressable>
-          </View>
+            style={[styles.modeChip, mode === 'my' && styles.modeChipActive]}
+            onPress={() => {
+              setMode('my');
+              setSelectedUser('');
+            }}
+          >
+            <AppText size={14} family="InterSemiBold" color={mode === 'my' ? colors.white : colors.blue}>
+              My Expenses
+            </AppText>
+          </Pressable>
+          <Pressable
+            style={[styles.modeChip, mode === 'approval' && styles.modeChipActive]}
+            onPress={() => setMode('approval')}
+          >
+            <AppText size={14} family="InterSemiBold" color={mode === 'approval' ? colors.white : colors.blue}>
+              Approvals
+            </AppText>
+          </Pressable>
         </View>
-      </Modal>
-    </View>
-  )
-}
 
-export default ExpenseReport
+        {mode === 'approval' && (
+          <View style={[styles.row, { gap: 13, marginTop: 15 }]}>
+            <Dropdown
+              style={[styles.UserBox, { flex: 1 }]}
+              placeholderStyle={{ color: '#718096', fontSize: 14 }}
+              selectedTextStyle={{ color: colors.black, fontSize: 14 }}
+              inputSearchStyle={{ height: 40, fontSize: 14 }}
+              data={userOptions}
+              search
+              searchPlaceholder="Search user..."
+              labelField="label"
+              valueField="value"
+              placeholder="All Users"
+              value={selectedUser}
+              onChange={(item) => setSelectedUser(item.value)}
+              renderRightIcon={() => <ArrowDownIcon />}
+            />
+          </View>
+        )}
+
+        {mode === 'approval' && (
+          <Pressable style={[styles.UserBox, styles.expenseDateFilter]} onPress={() => setShowCal(true)}>
+            <View style={styles.expenseDateTextBlock}>
+              <AppText size={12} color="#9094A3" family="InterSemiBold">
+                Date Range
+              </AppText>
+              <AppText size={14} color="#202432" family="InterBold" numLines={1}>
+                {formatYYYYMMDD(startDate)} to {formatYYYYMMDD(endDate)}
+              </AppText>
+            </View>
+            <View style={styles.expenseDateIconBox}>
+              <CalenderIcon size={16} color={colors.blue} />
+            </View>
+          </Pressable>
+        )}
+
+        {mode === 'approval' && (
+          <View style={styles.expenseSummaryGrid}>
+            {approvalSummary.map((item) => {
+              const active = String(status) === String(item.value);
+              return (
+                <Pressable
+                  key={String(item.label)}
+                  style={[styles.expenseSummaryChip, active && styles.expenseSummaryChipActive]}
+                  onPress={() => setStatus(item.value)}
+                >
+                  <AppText
+                    size={14}
+                    color={active ? colors.white : '#626779'}
+                    family="InterBold"
+                    numLines={1}
+                  >
+                    {item.label} · {item.count} · ₹{formatAmount(item.amount)}
+                  </AppText>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+      </View>
+
+      {loading ? (
+        <View style={[styles.container, styles.center]}>
+          <ActivityIndicator color={colors.blue} size="large" />
+        </View>
+      ) : (
+        <FlatList
+          data={expenses}
+          keyExtractor={(item, index) => `${item?.id || index}`}
+          renderItem={renderExpenseCard}
+          style={{ paddingHorizontal: rw(18), marginTop: 20 }}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={() => fetchExpenses(true)} />
+          }
+          ListEmptyComponent={() => (
+            <View style={[styles.center, { paddingTop: 80 }]}>
+              <AppText size={15} color="#718096" family="InterMedium">No expenses found</AppText>
+            </View>
+          )}
+          ListFooterComponent={() => <View style={{ height: 120 }} />}
+        />
+      )}
+
+      <Pressable
+        style={styles.fab}
+        onPress={() => navigation.navigate('AddNewExpense')}
+      >
+        <PlusAddIcon color="white" />
+      </Pressable>
+
+      <CustomerCalendar
+        showCal={showCal}
+        setShowCal={setShowCal}
+        minimumDate={new Date(2000, 0, 1)}
+        initialStartDate={startDate}
+        initialEndDate={endDate}
+        setStartDates={setStartDate}
+        setEndDates={setEndDate}
+        setRange={setRangeType}
+        range={rangeType}
+        onApplyClick={handleApplyDateRange}
+      />
+    </View>
+  );
+};
+
+export default ExpenseReport;
