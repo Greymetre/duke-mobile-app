@@ -259,6 +259,50 @@ export const styles = StyleSheet.create({
         justifyContent: 'space-between',
         gap: 12,
     },
+    attachmentPreviewModal: {
+        flex: 1,
+        backgroundColor: '#080A10',
+    },
+    attachmentPreviewHeader: {
+        minHeight: 68,
+        paddingHorizontal: 16,
+        paddingBottom: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        backgroundColor: '#111522',
+        zIndex: 2,
+    },
+    attachmentPreviewTitle: {
+        flex: 1,
+    },
+    attachmentPreviewClose: {
+        height: 42,
+        width: 42,
+        borderRadius: 21,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(255,255,255,0.12)',
+    },
+    attachmentPreviewContent: {
+        flex: 1,
+        position: 'relative',
+    },
+    attachmentImageGallery: {
+        flex: 1,
+    },
+    attachmentPdf: {
+        flex: 1,
+        width: '100%',
+        backgroundColor: '#D7D9DF',
+    },
+    attachmentPreviewLoader: {
+        ...StyleSheet.absoluteFillObject,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 28,
+        backgroundColor: 'rgba(8,10,16,0.72)',
+    },
     approvalDecisionRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -282,12 +326,12 @@ export const styles = StyleSheet.create({
         width: 28,
         borderRadius: 14,
         borderWidth: 2,
-        borderColor: '#1E8E3E',
+        borderColor: '#168AAD',
         justifyContent: 'center',
         alignItems: 'center',
     },
     approvalRadioApprove: {
-        borderColor: '#1E8E3E',
+        borderColor: '#168AAD',
     },
     approvalRadioReject: {
         borderColor: '#D93025',
@@ -299,7 +343,7 @@ export const styles = StyleSheet.create({
         height: 14,
         width: 14,
         borderRadius: 7,
-        backgroundColor: '#1E8E3E',
+        backgroundColor: '#168AAD',
     },
     approvalRadioRejectDot: {
         backgroundColor: '#D93025',
@@ -379,6 +423,17 @@ export const styles = StyleSheet.create({
         justifyContent: 'flex-end',
         marginTop: 16,
     },
+    expenseReasonBox: {
+        marginTop: 14,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        borderRadius: 12,
+        gap: 5,
+        backgroundColor: '#FFF7E8',
+    },
+    expenseReasonBoxRejected: {
+        backgroundColor: '#FDECEC',
+    },
     expenseViewButton: {
         minWidth: 96,
         height: 42,
@@ -390,27 +445,21 @@ export const styles = StyleSheet.create({
         justifyContent: 'center',
         gap: 10,
     },
-    expenseSummaryGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'space-between',
-        rowGap: 10,
-        marginTop: 16,
+    expenseStatusFilterRow: {
+        marginTop: 12,
     },
-    expenseSummaryChip: {
-        width: '48.5%',
-        minHeight: 44,
-        borderRadius: 24,
+    expenseStatusFilter: {
+        height: 48,
+        width: '100%',
+        borderRadius: 8,
         borderWidth: 1,
-        borderColor: '#DDE2EE',
-        backgroundColor: '#F4F6FA',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingHorizontal: 10,
+        borderColor: 'rgba(203, 213, 224, 1)',
+        backgroundColor: 'rgba(57, 82, 153, 0.07)',
+        paddingHorizontal: 14,
     },
-    expenseSummaryChipActive: {
-        backgroundColor: colors.blue,
-        borderColor: colors.blue,
+    expenseDropdownText: {
+        color: colors.black,
+        fontSize: 14,
     },
     expenseDateFilter: {
         marginTop: 12,

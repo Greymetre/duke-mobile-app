@@ -41,6 +41,7 @@ export const approveExpenseApi = (payload: {
   expense_id: string | number;
   approve_amnt: string | number;
   reasons?: string;
+  reason?: string;
 }) => axiosClient.post(API_ENDPOINT.APPROVE_EXPENSE, payload);
 
 export const rejectExpenseApi = (payload: {

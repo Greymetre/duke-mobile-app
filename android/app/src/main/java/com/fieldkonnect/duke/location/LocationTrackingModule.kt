@@ -1,10 +1,6 @@
 package com.fieldkonnect.duke.location
 
 import android.content.Intent
-import android.net.Uri
-import android.os.Build
-import android.os.PowerManager
-import android.provider.Settings
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -42,6 +38,19 @@ class LocationTrackingModule(private val reactContext: ReactApplicationContext) 
   @ReactMethod
   fun stopLocationTrackingAfterPunchOut(promise: Promise) {
     try {
+      // Do not launch a foreground service only to stop it when tracking is
+      // already inactive. Android requires every service launched with
+      // startForegroundService() to promote itself immediately; exiting
+      // before that promotion causes a RemoteServiceException and kills the
+      // app shortly after Home loads.
+      if (!LocationStorage.isActive(reactContext)) {
+        reactContext.stopService(
+          Intent(reactContext, LocationForegroundService::class.java),
+        )
+        promise.resolve(true)
+        return
+      }
+
       val intent = Intent(reactContext, LocationForegroundService::class.java).apply {
         action = LocationForegroundService.ACTION_STOP
       }
@@ -86,27 +95,4 @@ class LocationTrackingModule(private val reactContext: ReactApplicationContext) 
     }
   }
 
-  @ReactMethod
-  fun openBatteryOptimizationSettings(promise: Promise) {
-    try {
-      val powerManager = reactContext.getSystemService(PowerManager::class.java)
-      val packageName = reactContext.packageName
-      val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
-        !powerManager.isIgnoringBatteryOptimizations(packageName)
-      ) {
-        Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-          data = Uri.parse("package:$packageName")
-        }
-      } else {
-        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-          data = Uri.parse("package:$packageName")
-        }
-      }
-      intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-      reactContext.startActivity(intent)
-      promise.resolve(true)
-    } catch (error: Exception) {
-      promise.reject("battery_settings_failed", error)
-    }
-  }
 }

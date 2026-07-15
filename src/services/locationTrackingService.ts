@@ -66,8 +66,8 @@ const configureGeolocation = () => {
 const showTrackingDisclosure = () =>
   new Promise<boolean>(resolve => {
     Alert.alert(
-      'Location tracking',
-      'Location tracking starts after punch-in and stops after punch-out. It is used for attendance and field activity tracking.',
+      'Background location tracking',
+      'Fieldkonnect Duke collects location data to enable attendance and field activity tracking even when the app is closed or not in use. Tracking starts after punch-in, is sent securely to your organization, and stops after punch-out.',
       [
         { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
         { text: 'Continue', onPress: () => resolve(true) },
@@ -77,10 +77,15 @@ const showTrackingDisclosure = () =>
   });
 
 const requestAndroidPermission = async () => {
-  if (androidApiLevel() >= 33) {
-    await PermissionsAndroid.request(
-      PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
-    );
+  const alreadyHasBackgroundLocation =
+    androidApiLevel() < 29 ||
+    (await PermissionsAndroid.check(
+      PermissionsAndroid.PERMISSIONS.ACCESS_BACKGROUND_LOCATION,
+    ));
+
+  if (!alreadyHasBackgroundLocation) {
+    const acceptedDisclosure = await showTrackingDisclosure();
+    if (!acceptedDisclosure) return false;
   }
 
   const foreground = await PermissionsAndroid.requestMultiple([
@@ -120,6 +125,12 @@ const requestAndroidPermission = async () => {
         );
       }
     }
+  }
+
+  if (androidApiLevel() >= 33) {
+    await PermissionsAndroid.request(
+      PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+    );
   }
 
   return hasForegroundLocation;
@@ -543,11 +554,6 @@ export const startLiveLocationTracking = async (options?: {
   showDisclosure?: boolean;
   captureImmediately?: boolean;
 }) => {
-  if (options?.showDisclosure !== false) {
-    const accepted = await showTrackingDisclosure();
-    if (!accepted) return false;
-  }
-
   const started = await startLocationTrackingAfterPunchIn(
     store.getState().auth?.user,
     store.getState().auth?.token ?? undefined,

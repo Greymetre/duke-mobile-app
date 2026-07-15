@@ -3,60 +3,42 @@ import { Alert, Linking, Platform, Pressable, StyleSheet, View } from "react-nat
 import AppText from "../AppText/AppText";
 import { colors } from "../../utils/Colors";
 import { ClockIcon, LocationIcon } from "../../assets/svgs/HomePageSvgs";
-import Toast from "react-native-toast-message";
 
-const UserActivityCard = ({ todayPunchInData, item, navigation, index }: any) => {
-
-  const openGoogleMaps = (lat: string, lng: string, label?: string) => {
-    if (!lat || !lng) {
-      Toast.show({ type: "info", text1: "Location not available" })
-      return;
-    }
-
-    const latitude = parseFloat(lat);
-    const longitude = parseFloat(lng);
-
-    const url = Platform.select({
-      ios: `http://maps.apple.com/?ll=${latitude},${longitude}`,
-      android: `geo:${latitude},${longitude}?q=${latitude},${longitude}`
-    });
-
-    Linking.openURL(url as string);
-  };
-
-  const handleLocation = async (lat: any, lang: any, add: any) => {
-    // const gps = item?.gps_location?.trim();
+const UserActivityCard = ({ item }: any) => {
+  const handleLocation = async (lat: any, lng: any, add: any) => {
     const addr = add?.trim();
+    const latitude = Number(lat);
+    const longitude = Number(lng);
+    const hasCoordinateValues =
+      lat !== null &&
+      lat !== undefined &&
+      lng !== null &&
+      lng !== undefined &&
+      String(lat).trim() !== '' &&
+      String(lng).trim() !== '';
+    const hasCoordinates = hasCoordinateValues &&
+      Number.isFinite(latitude) &&
+      Number.isFinite(longitude) &&
+      Math.abs(latitude) <= 90 &&
+      Math.abs(longitude) <= 180;
 
-    let query = '';
-
-    // Prefer coordinates if available
-    // if (gps && gps.includes(',')) {
-    //   const [lat, lng] = gps.split(',').map((s: string) => s.trim());
-    if (lat && lang) {
-      query = `${lang},${lat}`;
-    }
-    // }
-
-    // Fallback to address
-    // if (!query && addr) {
-    //   query = encodeURIComponent(addr);
-    // }
-
-    if (!query) {
+    if (!hasCoordinates && !addr) {
       Alert.alert('No Location', 'No GPS or address available.');
       return;
     }
 
-    // ────────────────────────────────────────────────
-    // Android: try geo: URI first (works with most map apps)
-    // iOS: use maps://
-    // Fallback: browser
-    // ────────────────────────────────────────────────
-
-    const scheme = Platform.OS === 'android' ? 'geo:0,0?q=' : 'maps://?q=';
-    const nativeUrl = scheme + query;
-    const webUrl = `https://www.google.com/maps/search/?api=1&query=${query}`;
+    const markerLabel = addr || 'Activity Location';
+    const coordinateQuery = `${latitude},${longitude}`;
+    const nativeUrl = hasCoordinates
+      ? Platform.OS === 'android'
+        ? `geo:${coordinateQuery}?q=${encodeURIComponent(`${coordinateQuery}(${markerLabel})`)}`
+        : `http://maps.apple.com/?ll=${coordinateQuery}&q=${encodeURIComponent(markerLabel)}`
+      : Platform.OS === 'android'
+        ? `geo:0,0?q=${encodeURIComponent(addr)}`
+        : `http://maps.apple.com/?q=${encodeURIComponent(addr)}`;
+    const webUrl = hasCoordinates
+      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(coordinateQuery)}`
+      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr)}`;
 
     try {
       // Try native map app first
@@ -108,11 +90,12 @@ const UserActivityCard = ({ todayPunchInData, item, navigation, index }: any) =>
             {
               (item?.latitude != "" && item?.longitude != "") && (
                 <Pressable style={styles.row} onPress={() => {
-                  if (item?.title == "Checkin" || item?.title == "Checkout") {
-                    handleLocation(item?.longitude, item?.latitude, item?.location)
-                  } else {
-                    handleLocation(item?.latitude, item?.longitude, item?.location)
-                  }
+                  const isPunchActivity = item?.title === 'Punchin' || item?.title === 'Punchout';
+                  handleLocation(
+                    isPunchActivity ? item?.longitude : item?.latitude,
+                    isPunchActivity ? item?.latitude : item?.longitude,
+                    item?.location,
+                  )
                 }}>
                   <LocationIcon />
                   <AppText

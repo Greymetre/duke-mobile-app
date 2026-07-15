@@ -25,6 +25,7 @@ export const API_ENDPOINT = {
   GET_CUSTOMER_LIST: "api/getCustomerList",
   GET_CUSTOMER_INFO: "api/getCustomerInfo",
   STORE_CUSTOMER: "api/storeCustomer",
+  UPDATE_CUSTOMER_PROFILE: "api/updateCustomerProfile",
   SECONDARY_CUSTOMER: "api/secondary-customers",
   // MASTER_DISTRIBUTOR_POST:"api/master-distributors",
   // GET_SUPERVISOR_API : "api/master-distributors/supervisors",

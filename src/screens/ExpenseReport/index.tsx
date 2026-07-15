@@ -16,62 +16,94 @@ const STATUS_OPTIONS = [
   { label: 'Approved', value: 1 },
   { label: 'Rejected', value: 2 },
   { label: 'Checked', value: 3 },
-  { label: 'Approved', value: 4 },
+  { label: 'Checked By Reporting', value: 4 },
+  { label: 'Hold', value: 5 },
 ];
 
-const SUMMARY_STATUS_OPTIONS = [
-  { label: 'All', value: '' },
-  { label: 'Pending', value: 0 },
-  { label: 'Approved', value: 4 },
-  { label: 'Rejected', value: 2 },
-];
+const normalizeStatusText = (status: any) => String(status ?? '').trim().toLowerCase();
+
+const normalizeStatusValue = (status: any) => {
+  const normalized = normalizeStatusText(status);
+  const option = STATUS_OPTIONS.find(item =>
+    normalizeStatusText(item.value) === normalized || normalizeStatusText(item.label) === normalized,
+  );
+
+  return option ? normalizeStatusText(option.value) : normalized;
+};
 
 const statusLabel = (status: any) => {
-  const option = STATUS_OPTIONS.find(item => String(item.value) === String(status));
+  const normalized = normalizeStatusValue(status);
+  const option = STATUS_OPTIONS.find(item => normalizeStatusText(item.value) === normalized);
   return option?.label || status || 'Pending';
 };
 
 const statusColor = (status: any) => {
   if (isApprovedStatus(status)) return '#1E8E3E';
   if (String(status) === '2' || String(status).toLowerCase() === 'rejected') return '#D93025';
+  if (String(status) === '4' || String(status).toLowerCase() === 'checked by reporting') return '#168AAD';
+  if (String(status) === '3' || String(status) === '5') return '#4A5568';
   return '#D98324';
 };
 
 const formatAmount = (amount: any) => Number(amount || 0).toFixed(2);
 
-const getExpenseStatus = (item: any) => item?.checker_status ?? item?.status ?? 0;
+const getExpenseStatus = (item: any) =>
+  item?.checker_status !== null && item?.checker_status !== undefined && item?.checker_status !== ''
+    ? item.checker_status
+    : item?.status ?? 0;
 
-const normalizeStatusText = (status: any) => String(status ?? '').trim().toLowerCase();
+const getNestedValue = (source: any, path: string) =>
+  path.split('.').reduce((current, key) => current?.[key], source);
 
-const isPendingStatus = (status: any) => {
+const getExpenseDecisionReason = (item: any) => {
+  const paths = [
+    'reason',
+    'reasons',
+    'approval_reason',
+    'rejection_reason',
+    'approve_reason',
+    'reject_reason',
+    'approval_remark',
+    'rejection_remark',
+    'checker_reason',
+    'latest_approval.reason',
+    'last_approval.reason',
+    'approval.reason',
+    'approval.reasons',
+  ];
+
+  for (const path of paths) {
+    const value = getNestedValue(item, path);
+    if (value !== null && value !== undefined && String(value).trim()) return String(value).trim();
+  }
+
+  return '';
+};
+
+const shouldShowDecisionReason = (status: any) => {
   const value = normalizeStatusText(status);
-  return value === '' || value === '0' || value === 'pending';
+  return value === '1' || value === '2' || value === 'rejected' || value === 'approved';
 };
 
 const isApprovedStatus = (status: any) => {
   const value = normalizeStatusText(status);
-  return value === '1' || value === '4' || value === 'approved' || value === 'checked by reporting';
+  return value === '1' || value === 'approved';
 };
 
-const isRejectedStatus = (status: any) => {
-  const value = normalizeStatusText(status);
-  return value === '2' || value === 'rejected';
-};
+const matchesExactStatus = (status: any, value: any) =>
+  normalizeStatusValue(status) === normalizeStatusValue(value);
 
-const matchesSummaryStatus = (status: any, value: any) => {
-  if (value === '') return true;
-  if (String(value) === '0') return isPendingStatus(status);
-  if (String(value) === '1' || String(value) === '4') return isApprovedStatus(status);
-  if (String(value) === '2') return isRejectedStatus(status);
-  return String(status) === String(value);
-};
+const getApprovalStatusOptions = () => STATUS_OPTIONS
+  .filter(item => item.value !== '')
+  .map(item => ({ ...item }));
 
 const getExpenseAmount = (item: any) => {
   const currentStatus = getExpenseStatus(item);
-  if (isApprovedStatus(currentStatus)) {
-    return Number(item?.approve_amount ?? item?.claim_amount ?? 0);
-  }
-  return Number(item?.claim_amount || 0);
+  const rawAmount = isApprovedStatus(currentStatus)
+    ? item?.approve_amount ?? item?.claim_amount
+    : item?.claim_amount;
+  const amount = Number(String(rawAmount ?? 0).replace(/[^0-9.-]/g, ''));
+  return Number.isFinite(amount) ? amount : 0;
 };
 
 const displayValue = (value: any, fallback = '—') =>
@@ -114,6 +146,7 @@ const ExpenseReport = ({ navigation }: any) => {
   const [status, setStatus] = useState<any>('');
   const [expenses, setExpenses] = useState<any[]>([]);
   const [approvalSummaryExpenses, setApprovalSummaryExpenses] = useState<any[]>([]);
+  const [approvalStatuses, setApprovalStatuses] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [selectedUser, setSelectedUser] = useState<any>('');
   const [loading, setLoading] = useState(false);
@@ -136,10 +169,11 @@ const ExpenseReport = ({ navigation }: any) => {
   }, [users]);
 
   const approvalSummary = useMemo(() => {
-    return SUMMARY_STATUS_OPTIONS.map((option) => {
+    const options = [{ label: 'All', value: '' }, ...approvalStatuses];
+    return options.map((option) => {
       const list = option.value === ''
         ? approvalSummaryExpenses
-        : approvalSummaryExpenses.filter((item) => matchesSummaryStatus(getExpenseStatus(item), option.value));
+        : approvalSummaryExpenses.filter((item) => matchesExactStatus(getExpenseStatus(item), option.value));
 
       const amount = list.reduce((sum, item) => sum + getExpenseAmount(item), 0);
 
@@ -149,7 +183,12 @@ const ExpenseReport = ({ navigation }: any) => {
         amount,
       };
     });
-  }, [approvalSummaryExpenses]);
+  }, [approvalStatuses, approvalSummaryExpenses]);
+
+  const statusOptions = useMemo(() => approvalSummary.map(item => ({
+    ...item,
+    displayLabel: `${item.label} · ${item.count} · ₹${formatAmount(item.amount)}`,
+  })), [approvalSummary]);
 
   const fetchExpenses = useCallback(async (isRefresh = false) => {
     try {
@@ -182,6 +221,7 @@ const ExpenseReport = ({ navigation }: any) => {
       setExpenses(list || []);
       if (mode === 'approval') {
         setUsers(payload?.users || []);
+        setApprovalStatuses(current => current.length ? current : getApprovalStatusOptions());
       }
     } catch (error: any) {
       console.log('Expense listing error:', error?.response || error);
@@ -199,6 +239,7 @@ const ExpenseReport = ({ navigation }: any) => {
   const fetchApprovalSummary = useCallback(async () => {
     if (mode !== 'approval') {
       setApprovalSummaryExpenses([]);
+      setApprovalStatuses([]);
       return;
     }
 
@@ -214,6 +255,7 @@ const ExpenseReport = ({ navigation }: any) => {
       const listPayload = payload?.data;
       const list = Array.isArray(listPayload) ? listPayload : (listPayload?.data || []);
       setApprovalSummaryExpenses(list || []);
+      setApprovalStatuses(getApprovalStatusOptions());
       setUsers(payload?.users || []);
     } catch (error: any) {
       console.log('Expense summary error:', error?.response || error);
@@ -232,7 +274,13 @@ const ExpenseReport = ({ navigation }: any) => {
     setShowCal(false);
   };
 
-  const renderExpenseCard = ({ item }: any) => (
+  const renderExpenseCard = ({ item }: any) => {
+    const currentStatus = getExpenseStatus(item);
+    const decisionReason = getExpenseDecisionReason(item);
+    const showDecisionReason = shouldShowDecisionReason(currentStatus) && Boolean(decisionReason);
+    const rejected = normalizeStatusText(currentStatus) === '2' || normalizeStatusText(currentStatus) === 'rejected';
+
+    return (
     <Pressable
       style={[styles.expenseCard, shadowStyle]}
       onPress={() => navigation.navigate('ExpenseDetails', { expense: item, mode })}
@@ -263,8 +311,8 @@ const ExpenseReport = ({ navigation }: any) => {
         <ExpenseInfoCell label="Attachment" value={getExpenseImageCount(item)} />
         <ExpenseInfoCell
           label="Status"
-          value={statusLabel(getExpenseStatus(item))}
-          color={statusColor(getExpenseStatus(item))}
+          value={statusLabel(currentStatus)}
+          color={statusColor(currentStatus)}
         />
         <ExpenseInfoCell label="Rate" value={displayValue(item?.rate ? `₹ ${formatAmount(item?.rate)}` : item?.rate)} />
         <ExpenseInfoCell label="Claim Amt" value={`₹ ${formatAmount(item?.claim_amount)}`} />
@@ -274,6 +322,21 @@ const ExpenseReport = ({ navigation }: any) => {
           color={item?.approve_amount ? '#202432' : '#1E8E3E'}
         />
       </View>
+
+      {showDecisionReason && (
+        <View style={[styles.expenseReasonBox, rejected && styles.expenseReasonBoxRejected]}>
+          <AppText
+            size={13}
+            color={rejected ? '#D93025' : '#1E8E3E'}
+            family="InterBold"
+          >
+            REASON
+          </AppText>
+          <AppText size={15} color="#202432" family="InterMedium">
+            {decisionReason}
+          </AppText>
+        </View>
+      )}
 
       <View style={styles.expenseActionRow}>
         <Pressable
@@ -285,7 +348,8 @@ const ExpenseReport = ({ navigation }: any) => {
         </Pressable>
       </View>
     </Pressable>
-  );
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -295,6 +359,7 @@ const ExpenseReport = ({ navigation }: any) => {
             style={[styles.modeChip, mode === 'my' && styles.modeChipActive]}
             onPress={() => {
               setMode('my');
+              setStatus('');
               setSelectedUser('');
             }}
           >
@@ -304,7 +369,10 @@ const ExpenseReport = ({ navigation }: any) => {
           </Pressable>
           <Pressable
             style={[styles.modeChip, mode === 'approval' && styles.modeChipActive]}
-            onPress={() => setMode('approval')}
+            onPress={() => {
+              setMode('approval');
+              setStatus('');
+            }}
           >
             <AppText size={14} family="InterSemiBold" color={mode === 'approval' ? colors.white : colors.blue}>
               Approvals
@@ -349,26 +417,19 @@ const ExpenseReport = ({ navigation }: any) => {
         )}
 
         {mode === 'approval' && (
-          <View style={styles.expenseSummaryGrid}>
-            {approvalSummary.map((item) => {
-              const active = String(status) === String(item.value);
-              return (
-                <Pressable
-                  key={String(item.label)}
-                  style={[styles.expenseSummaryChip, active && styles.expenseSummaryChipActive]}
-                  onPress={() => setStatus(item.value)}
-                >
-                  <AppText
-                    size={14}
-                    color={active ? colors.white : '#626779'}
-                    family="InterBold"
-                    numLines={1}
-                  >
-                    {item.label} · {item.count} · ₹{formatAmount(item.amount)}
-                  </AppText>
-                </Pressable>
-              );
-            })}
+          <View style={styles.expenseStatusFilterRow}>
+            <Dropdown
+              style={styles.expenseStatusFilter}
+              placeholderStyle={styles.expenseDropdownText}
+              selectedTextStyle={styles.expenseDropdownText}
+              data={statusOptions}
+              labelField="displayLabel"
+              valueField="value"
+              placeholder="All · 0 · ₹0.00"
+              value={status}
+              onChange={(item) => setStatus(item.value)}
+              renderRightIcon={() => <ArrowDownIcon />}
+            />
           </View>
         )}
       </View>

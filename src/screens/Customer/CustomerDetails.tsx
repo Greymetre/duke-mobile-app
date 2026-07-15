@@ -1,4 +1,4 @@
-import { View, Text, Pressable, ScrollView, Alert, Platform, Linking, Modal, KeyboardAvoidingView, TextInput } from 'react-native'
+import { View, Text, Pressable, ScrollView, Alert, Platform, Linking, Modal } from 'react-native'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { styles } from './styles'
 import { rw } from '../../utils/responsive'
@@ -7,7 +7,7 @@ import FastImage from 'react-native-fast-image'
 import { BuyOrderIcon, CalenderAddIcon, CalenderIcon, CrossIcon, OrderBoxIcon, OrderHistoryIcon } from '../../assets/svgs/SvgsFile'
 import { colors } from '../../utils/Colors'
 import { useGetCustomerData, useGetSecondaryCustomerData, useGetSubmitCheckIN } from '../../api/query/CustomerApi'
-import { BASE_URL, IMAGE_BASE_URL } from '../../api/AxiosClient'
+import { resolveMediaUrl } from '../../api/AxiosClient'
 import { CheckIcon } from '../../assets/svgs/HomePageSvgs'
 import Toast from 'react-native-toast-message'
 import Geolocation from '@react-native-community/geolocation'
@@ -15,18 +15,12 @@ import { useFocusEffect } from '@react-navigation/native'
 import useLocationHook from '../../api/hooks/uselocationhook'
 import Gallery, { GalleryRef } from 'react-native-awesome-gallery'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import ActionSheet, { ActionSheetRef } from 'react-native-actions-sheet'
-import axios from 'axios'
-import store, { useAppSelector } from '../../components/redux/Store'
 import { formatMobileNumberList, normalizeIndianMobileNumber } from '../../utils/phone'
 
 type CustomerDetailsProps = {
   navigation: any
   route: any
 }
-
-type StatusType = 'APPROVED' | 'REJECTED' | 'PENDING' | 'Random';
-
 
 const CustomerDetails = ({ navigation, route }: CustomerDetailsProps) => {
   const routePunchInOut = route?.params?.isPunchedIn
@@ -40,19 +34,11 @@ const CustomerDetails = ({ navigation, route }: CustomerDetailsProps) => {
   const [images, setImages] = useState<string[]>([]); // always array
   const galleryRef = useRef<GalleryRef>(null);
   const [initialIndex, setInitialIndex] = useState(0);
-  const { user } = useAppSelector(
-    (state) => state.auth
-  );
-  const [punchInStatus, setPunchInStatus] = useState("Random");
   // ── New states for location ────────────────────────────────
 
   const [locationError, setLocationError] = useState<string | null>(null)
 
   const routeItem = route?.params?.item
-  const [statusLoading, setStatusLoading] = useState(false);
-  const [hirarchyLevel, setHirarchyLevel] = useState(4);
-  const [remark, setRemark] = useState('');
-  const rejectSheetRef = useRef<ActionSheetRef>(null);
 
   // Optional: better typing
   const { mutateAsync: mutateCustomerData } = useGetCustomerData()
@@ -65,61 +51,6 @@ const CustomerDetails = ({ navigation, route }: CustomerDetailsProps) => {
       handleGetCustomerData(routeItem?.customer_id || routeItem?.id)
     }, [])
   )
-
-
-  const updateCustomerStatus = async (status: StatusType, remarkText: string = '') => {
-    if (statusLoading) return;
-
-    setStatusLoading(true);
-
-    const payload = {
-      status: status,
-      remark: status === 'REJECTED' ? remarkText.trim() : '',
-    };
-
-    try {
-      // Replace with your real token source (context / storage / interceptor)
-      const token = store.getState().auth?.token; // ← get from auth
-
-      const response = await axios.put(
-        `https://duke.fieldkonnect.in/api/secondary-customers/${routeItem?.id}/status`,
-        payload,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: 'application/json',
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      if (response?.data?.status === true) {
-        setPunchInStatus(status);
-        Toast.show({
-          type: 'success',
-          text1: `Customer ${status.toLowerCase()}`,
-          position: 'top',
-        });
-
-        // Optional: refresh data
-        handleGetCustomerData(routeItem?.id);
-      } else {
-        throw new Error(response?.data?.message || 'Update failed');
-      }
-    } catch (err: any) {
-      console.log('Status update error:', err);
-      Toast.show({
-        type: 'error',
-        text1: 'Failed to update status',
-        text2: err?.response?.data?.message || err.message,
-        position: 'top',
-      });
-    } finally {
-      setStatusLoading(false);
-      setRemark('');
-      rejectSheetRef.current?.hide();
-    }
-  };
 
   // ── Fetch current location once ─────────────────────────────
   const { coords } = useLocationHook();
@@ -156,7 +87,14 @@ const CustomerDetails = ({ navigation, route }: CustomerDetailsProps) => {
           const data = res?.data?.data
           const details = data?.customerdetails
           const address = data?.customeraddress
-          setPunchInStatus(data?.status)
+          const customerDocuments = Array.isArray(data?.customerdocuments)
+            ? data.customerdocuments.reduce((documentsByName: Record<string, string>, document: any) => {
+              const name = String(document?.document_name || '').toLowerCase().replace(/[\s_-]/g, '')
+              const path = document?.file_path || document?.document_path || document?.path || document?.url
+              if (name && path) documentsByName[name] = path
+              return documentsByName
+            }, {})
+            : {}
           setData(data)
           const distributorNames = res?.data?.distributors
             ?.map((d: any) => d.shop_name)
@@ -171,7 +109,7 @@ const CustomerDetails = ({ navigation, route }: CustomerDetailsProps) => {
             mobile: data?.mobile_number || data?.mobile,
             billing_pincode: data?.pincode?.pincode || address?.pincodename?.pincode,
             registration_type: data?.type || data?.customer_type,
-            owner_photo: data?.owner_photo,
+            owner_photo: data?.owner_photo || data?.profile_image,
             check_status: res?.data?.check_status,
             state: data?.state?.state_name || address?.statename?.state_name || '',
             district: data?.district?.district_name || address?.districtname?.district_name || '',
@@ -189,9 +127,11 @@ const CustomerDetails = ({ navigation, route }: CustomerDetailsProps) => {
             bank_name: data?.bank_name || details?.bank_name || '',
             ifsc_code: data?.ifsc_code || details?.ifsc_code || '',
             account_holder_name: data?.account_holder_name || details?.account_holder || '',
-            gst_attachment: data?.gst_attachment || null,
-            pan_attachment: data?.pan_attachment || null,
-            bank_proof: data?.bank_proof || null,
+            gst_attachment: data?.gst_attachment || customerDocuments.gstin || customerDocuments.gst || null,
+            pan_attachment: data?.pan_attachment || customerDocuments.pan || null,
+            bank_proof: data?.bank_proof || customerDocuments.bankpass || customerDocuments.bankproof || null,
+            aadhar: data?.aadhar || details?.aadhar || customerDocuments.aadhar || customerDocuments.aadhaar || null,
+            aadhar_back: customerDocuments.aadharback || customerDocuments.aadhaarback || null,
             remark: data?.remark || '',
             created_by: data?.created_by || '',
             creator: data?.creator?.name || '',
@@ -201,7 +141,6 @@ const CustomerDetails = ({ navigation, route }: CustomerDetailsProps) => {
           setData(res?.data?.data)
           setCustomerData({ ...res?.data?.data, check_status: res?.data?.check_status })
         }
-        setHirarchyLevel(res?.data?.hierarchy_level)
         seCheckInHandle(
           !!res?.data?.check_status?.last_checkin?.checkin_datetime &&
           !res?.data?.check_status?.last_checkin?.checkout_datetime
@@ -319,6 +258,21 @@ const CustomerDetails = ({ navigation, route }: CustomerDetailsProps) => {
     !customerData?.check_status?.last_checkin?.checkout_datetime
 
   const documents = customerData?.documents ? JSON.parse(customerData.documents) : []
+  const customerPrimaryImage = customerData?.shop_image || customerData?.owner_photo
+  const customerAttachments = [
+    { key: 'shop-photo', label: 'Shop Photo', value: customerData?.shop_image },
+    { key: 'owner-photo', label: 'Owner Photo', value: customerData?.owner_photo },
+    { key: 'gst', label: 'GST Attachment', value: customerData?.gst_attachment },
+    { key: 'pan', label: 'PAN Attachment', value: customerData?.pan_attachment },
+    { key: 'bank', label: 'Bank Proof', value: customerData?.bank_proof },
+    { key: 'aadhar-front', label: 'Aadhaar Card', value: customerData?.aadhar },
+    { key: 'aadhar-back', label: 'Aadhaar Card Back', value: customerData?.aadhar_back },
+  ]
+    .filter(attachment => Boolean(attachment.value))
+    .map(attachment => ({
+      ...attachment,
+      uri: resolveMediaUrl(attachment.value),
+    }))
   const handleLocation = async () => {
     const gps = customerData?.gps_location?.trim();
     const addr = customerData?.address_line?.trim();
@@ -422,120 +376,20 @@ const CustomerDetails = ({ navigation, route }: CustomerDetailsProps) => {
           </Pressable>
         </View>
 
-        {
-          activeTab == 2 && route?.params?.type && (
-            <>
-              <View style={[styles.approveRejectView, styles.row, { gap: 20 }]}>
-                <View style={[styles.approveView, styles.row]}>
-                  <Pressable
-                    style={[styles.circle, styles.center]}
-                    onPress={() => {
-                      if (user?.id == customerData?.created_by || hirarchyLevel > 2) {
-                        return
-                      }
-                      // If already approved → just toggle off (your existing logic)
-                      if (punchInStatus === "APPROVED") {
-                        setPunchInStatus('Random');
-                        return;
-                      }
-
-                      // Show confirmation dialog before approving
-                      Alert.alert(
-                        "Confirm Approval",
-                        "Are you sure you want to approve this customer?",
-                        [
-                          {
-                            text: "Cancel",
-                            style: "cancel",
-                            // Optional: you can reset or do nothing
-                          },
-                          {
-                            text: "Yes, Approve",
-                            style: "default",
-                            onPress: () => {
-                              setPunchInStatus("APPROVED");
-                              updateCustomerStatus('APPROVED');
-                            }
-                          }
-                        ],
-                        { cancelable: true }
-                      );
-                    }}
-                  >
-                    <View
-                      style={[
-                        styles.circleInner,
-                        punchInStatus === "APPROVED" && {
-                          backgroundColor: "#339D4F",
-                          borderRadius: 12,
-                        },
-                      ]}
-                    />
-                  </Pressable>
-                  <AppText size={14} color='#339D4F' family='InterRegular'>Approve</AppText>
-                </View>
-
-                <View style={[styles.approveView, styles.row]}>
-                  <Pressable style={[styles.circle, styles.center, { borderColor: "#FF3333" }]} onPress={() => {
-                    if (user?.id == customerData?.created_by || hirarchyLevel > 2) {
-                      return
-                    }
-                    if (punchInStatus == "REJECTED") {
-                      setPunchInStatus('Random')
-                    } else {
-                      setPunchInStatus("REJECTED")
-                      rejectSheetRef.current?.show();
-                    }
-                  }}>
-                    <View style={[styles.circleInner, punchInStatus == "REJECTED" && { backgroundColor: "#FF3333", borderRadius: 12, }]} />
-                  </Pressable>
-                  <AppText size={14} color='#FF3333' family='InterRegular'>Reject</AppText>
-                </View>
-
-                <View style={[styles.approveView, styles.row]}>
-                  <Pressable style={[styles.circle, styles.center, { borderColor: "#d1c10c" }]} onPress={() => {
-                    if (user?.id == customerData?.created_by || hirarchyLevel > 2) {
-                      return
-                    }
-                    if (punchInStatus == "PENDING") {
-                      setPunchInStatus('Random')
-                    } else {
-                      setPunchInStatus("PENDING")
-                      updateCustomerStatus('PENDING');
-                    }
-                  }}>
-                    <View style={[styles.circleInner, punchInStatus == "PENDING" && { backgroundColor: "#d1c10c", borderRadius: 12, }]} />
-                  </Pressable>
-                  <AppText size={14} color='#968a07' family='InterRegular'>Pending</AppText>
-                </View>
-              </View>
-              {
-                punchInStatus == "REJECTED" && (
-                  <View>
-                    <AppText size={16} color='red' underline='none' family='InterSemiBold'>Reject:
-                      <AppText size={16} color='red' underline='underline' family='InterMedium'>{customerData?.remark}</AppText>
-                    </AppText>
-                  </View>
-                )
-              }
-            </>
-          )
-        }
-
         {activeTab == 1 && (
           <View style={styles.activeInnerContainer}>
             <View style={styles.imageView}>
               <Pressable onPress={() => {
-                if (customerData?.shop_image) {
-                  setImages([`${IMAGE_BASE_URL}public/storage/${customerData.shop_image}`])
+                if (customerPrimaryImage) {
+                  setImages([resolveMediaUrl(customerPrimaryImage)])
                   setInitialIndex(0);
                   setModalVisible(true)
                 }
 
               }}>
                 <FastImage
-                  source={customerData?.shop_image
-                    ? { uri: `${IMAGE_BASE_URL}public/storage/${customerData?.shop_image}` } : require('../../assets/images/Dummy/Customer2.png')}
+                  source={customerPrimaryImage
+                    ? { uri: resolveMediaUrl(customerPrimaryImage) } : require('../../assets/images/Dummy/Customer2.png')}
                   style={styles.firstImage}
 
                 />
@@ -825,14 +679,14 @@ const CustomerDetails = ({ navigation, route }: CustomerDetailsProps) => {
                 </AppText>
                 <View style={[styles.row, { flex: 1, gap: 27, marginTop: 20 }]}>
                   <Pressable style={styles.firstAttachemnt} onPress={() => {
-                    setImages([`${IMAGE_BASE_URL}public/storage/${customerData.shop_image}`])
+                    setImages([resolveMediaUrl(customerData.shop_image)])
                     setInitialIndex(0);
                     setModalVisible(true)
                   }}>
                     <FastImage
                       style={styles.attImg}
                       source={customerData?.shop_image
-                        ? { uri: `${IMAGE_BASE_URL}public/storage/${customerData.shop_image}` }
+                        ? { uri: resolveMediaUrl(customerData.shop_image) }
                         : require('../../assets/images/Dummy/Customer2.png')}
                     />
                     <AppText align="center" size={14} color="black" family="InterBold">
@@ -846,7 +700,7 @@ const CustomerDetails = ({ navigation, route }: CustomerDetailsProps) => {
                         <FastImage
                           style={styles.attImg}
                           source={customerData?.owner_photo
-                            ? { uri: `${IMAGE_BASE_URL}public/storage/${customerData?.owner_photo}` }
+                            ? { uri: resolveMediaUrl(customerData?.owner_photo) }
                             : require('../../assets/images/Dummy/Customer2.png')}
                         />
                         : (
@@ -856,7 +710,7 @@ const CustomerDetails = ({ navigation, route }: CustomerDetailsProps) => {
                                 <FastImage
                                   style={styles.attImg}
                                   source={documents[0]
-                                    ? { uri: `${IMAGE_BASE_URL}public/storage/${documents[0]}` }
+                                    ? { uri: resolveMediaUrl(documents[0]) }
                                     : require('../../assets/images/Dummy/Customer2.png')}
                                 />
                               )
@@ -926,7 +780,12 @@ const CustomerDetails = ({ navigation, route }: CustomerDetailsProps) => {
                     if (!route?.params?.type) {
                       navigation.navigate('AddCustomer', { customer: customerData })
                     } else {
-                      navigation.navigate('AddSecondaryCustomer', { customer: data, type: routeItem?.type })
+                      navigation.navigate('AddSecondaryCustomer', {
+                        customer: data,
+                        type: data?.type || data?.customer_type || routeItem?.type,
+                        customerTypeId: data?.customer_type_id || data?.customertype || routeItem?.customer_type_id,
+                        customerTypeName: data?.customer_type || data?.type || routeItem?.customer_type,
+                      })
                     }
                   }}>
                     <AppText color='white' family='InterSemiBold' size={16}>Edit</AppText>
@@ -1223,88 +1082,31 @@ const CustomerDetails = ({ navigation, route }: CustomerDetailsProps) => {
               </AppText>
 
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginTop: 16 }}>
-                <Pressable
-                  style={{ width: '48%', marginBottom: 16 }}
-                  onPress={() => {
-                    if (customerData?.shop_image) {
-                      setImages([`${IMAGE_BASE_URL}public/storage/${customerData.shop_image}`]);
+                {customerAttachments.map(attachment => (
+                  <Pressable
+                    key={attachment.key}
+                    style={{ width: '48%', marginBottom: 16 }}
+                    onPress={() => {
+                      setImages([attachment.uri]);
                       setInitialIndex(0);
                       setModalVisible(true);
-                    }
-                  }}
-                >
-                  <FastImage
-                    style={{ height: 140, width: '100%', borderRadius: 12 }}
-                    source={
-                      customerData?.shop_image
-                        ? { uri: `${IMAGE_BASE_URL}public/storage/${customerData.shop_image}` }
-                        : require('../../assets/images/Dummy/Customer2.png')
-                    }
-                    resizeMode="cover"
-                  />
-                  <AppText align="center" size={13} color="black" family="InterBold" style={{ marginTop: 6 }}>
-                    Shop Photo
+                    }}
+                  >
+                    <FastImage
+                      style={{ height: 140, width: '100%', borderRadius: 12 }}
+                      source={{ uri: attachment.uri }}
+                      resizeMode="cover"
+                    />
+                    <AppText align="center" size={13} color="black" family="InterBold" style={{ marginTop: 6 }}>
+                      {attachment.label}
+                    </AppText>
+                  </Pressable>
+                ))}
+
+                {customerAttachments.length === 0 && (
+                  <AppText size={14} color="black" family="InterRegular" opacity={0.6}>
+                    No attachments available
                   </AppText>
-                </Pressable>
-
-                {customerData?.gst_attachment && (
-                  <Pressable
-                    style={{ width: '48%', marginBottom: 16 }}
-                    onPress={() => {
-                      setImages([`${IMAGE_BASE_URL}public/storage/${customerData.gst_attachment}`]);
-                      setInitialIndex(0);
-                      setModalVisible(true);
-                    }}
-                  >
-                    <FastImage
-                      style={{ height: 140, width: '100%', borderRadius: 12 }}
-                      source={{ uri: `${IMAGE_BASE_URL}public/storage/${customerData.gst_attachment}` }}
-                      resizeMode="cover"
-                    />
-                    <AppText align="center" size={13} color="black" family="InterBold" style={{ marginTop: 6 }}>
-                      GST Attachment
-                    </AppText>
-                  </Pressable>
-                )}
-
-                {customerData?.pan_attachment && (
-                  <Pressable
-                    style={{ width: '48%', marginBottom: 16 }}
-                    onPress={() => {
-                      setImages([`${IMAGE_BASE_URL}public/storage/${customerData.pan_attachment}`]);
-                      setInitialIndex(0);
-                      setModalVisible(true);
-                    }}
-                  >
-                    <FastImage
-                      style={{ height: 140, width: '100%', borderRadius: 12 }}
-                      source={{ uri: `${IMAGE_BASE_URL}public/storage/${customerData.pan_attachment}` }}
-                      resizeMode="cover"
-                    />
-                    <AppText align="center" size={13} color="black" family="InterBold" style={{ marginTop: 6 }}>
-                      PAN Attachment
-                    </AppText>
-                  </Pressable>
-                )}
-
-                {customerData?.bank_proof && (
-                  <Pressable
-                    style={{ width: '48%', marginBottom: 16 }}
-                    onPress={() => {
-                      setImages([`${IMAGE_BASE_URL}public/storage/${customerData.bank_proof}`]);
-                      setInitialIndex(0);
-                      setModalVisible(true);
-                    }}
-                  >
-                    <FastImage
-                      style={{ height: 140, width: '100%', borderRadius: 12 }}
-                      source={{ uri: `${IMAGE_BASE_URL}public/storage/${customerData.bank_proof}` }}
-                      resizeMode="cover"
-                    />
-                    <AppText align="center" size={13} color="black" family="InterBold" style={{ marginTop: 6 }}>
-                      Bank Proof
-                    </AppText>
-                  </Pressable>
                 )}
               </View>
             </View>
@@ -1318,7 +1120,12 @@ const CustomerDetails = ({ navigation, route }: CustomerDetailsProps) => {
                     if (!route?.params?.type) {
                       navigation.navigate('AddCustomer', { customer: customerData });
                     } else {
-                      navigation.navigate('AddSecondaryCustomer', { customer: data, type: routeItem?.type });
+                      navigation.navigate('AddSecondaryCustomer', {
+                        customer: data,
+                        type: data?.type || data?.customer_type || routeItem?.type,
+                        customerTypeId: data?.customer_type_id || data?.customertype || routeItem?.customer_type_id,
+                        customerTypeName: data?.customer_type || data?.type || routeItem?.customer_type,
+                      });
                     }
                   }}
                 >
@@ -1373,101 +1180,6 @@ const CustomerDetails = ({ navigation, route }: CustomerDetailsProps) => {
         </Modal>
       </ScrollView >
 
-      <ActionSheet
-        ref={rejectSheetRef}
-        // gestureEnabled={true}
-        // snapPoints={[45, 70]}            // % of screen height
-        statusBarTranslucent
-        drawUnderStatusBar={true}
-        containerStyle={{
-          backgroundColor: '#fff',
-          borderTopLeftRadius: 24,
-          borderTopRightRadius: 24,
-        }}
-        indicatorStyle={{
-          backgroundColor: '#ccc',
-          width: 40,
-          height: 5,
-        }}
-        keyboardHandlerEnabled={true}     // important for TextInput
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={{ height: 'auto' }}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-        >
-          <View style={{ paddingHorizontal: 24, paddingTop: 16, }}>
-            <AppText
-              size={18}
-              family="InterSemiBold"
-              color="black"
-              style={{ marginBottom: 16 }}
-            >
-              Reason for Rejection
-            </AppText>
-
-            <TextInput
-              multiline
-              numberOfLines={5}
-              placeholder="e.g., Bank proof missing, mismatch in PAN details..."
-              placeholderTextColor="#999"
-              value={remark}
-              onChangeText={setRemark}
-              style={{
-                borderWidth: 1,
-                borderColor: '#ddd',
-                borderRadius: 12,
-                padding: 14,
-                fontSize: 16,
-                minHeight: 120,
-                maxHeight: 220,
-                textAlignVertical: 'top',
-                color: '#000',
-                backgroundColor: '#fafafa',
-              }}
-              maxLength={400}
-              editable={!statusLoading}
-            />
-
-            <View style={{ flexDirection: 'row', gap: 12, marginTop: 24 }}>
-              <Pressable
-                style={{
-                  flex: 1,
-                  paddingVertical: 14,
-                  backgroundColor: '#f0f0f0',
-                  borderRadius: 12,
-                  alignItems: 'center',
-                }}
-                onPress={() => {
-                  setRemark('');
-                  rejectSheetRef.current?.hide();
-                }}
-                disabled={statusLoading}
-              >
-                <AppText color="#555" family="InterMedium">Cancel</AppText>
-              </Pressable>
-
-              <Pressable
-                style={{
-                  flex: 1,
-                  paddingVertical: 14,
-                  backgroundColor: remark.trim().length < 3 ? '#ffb3b3' : '#FF3333',
-                  borderRadius: 12,
-                  alignItems: 'center',
-                }}
-                disabled={statusLoading || remark.trim().length < 3}
-                onPress={() => updateCustomerStatus('REJECTED', remark)}
-              >
-                <AppText color="white" family="InterSemiBold">
-                  {statusLoading ? 'Submitting...' : 'Confirm Reject'}
-                </AppText>
-              </Pressable>
-            </View>
-
-            <View style={{ height: 20 }} /> {/* bottom padding */}
-          </View>
-        </KeyboardAvoidingView>
-      </ActionSheet>
     </View >
   )
 }

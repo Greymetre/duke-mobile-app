@@ -57,6 +57,8 @@ class LocationForegroundService : Service() {
     when (intent?.action) {
       ACTION_STOP -> {
         if (!LocationStorage.isActive(this)) {
+          // This branch is a safeguard for a state race. Normally the native
+          // module now avoids starting the service when tracking is inactive.
           stopSelf()
           return START_NOT_STICKY
         }

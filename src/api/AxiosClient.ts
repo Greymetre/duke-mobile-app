@@ -8,6 +8,32 @@ export const BASE_URL = 'https://duke.fieldkonnect.in/';
 export const IMAGE_BASE_URL = 'https://fieldkonnect.in/ksb-pr/';
 // export const BASE_URL = 'http://127.0.0.1:8000/';
 
+/**
+ * API media fields are not consistent: newer endpoints return complete URLs,
+ * while older endpoints return a path relative to public/storage. Never add a
+ * base URL to an already absolute URL (that produces an invalid image URL).
+ */
+export const resolveMediaUrl = (value?: string | null): string => {
+  const path = String(value || '').trim();
+
+  if (!path) return '';
+  if (/^https?:\/\//i.test(path)) return path;
+  if (path.startsWith('//')) return `https:${path}`;
+
+  const baseUrl = BASE_URL.replace(/\/+$/, '');
+  const normalizedPath = path.replace(/^\/+/, '');
+
+  if (normalizedPath.startsWith('public/') || normalizedPath.startsWith('storage/')) {
+    return `${baseUrl}/${normalizedPath}`;
+  }
+
+  if (normalizedPath.startsWith('uploads/')) {
+    return `${baseUrl}/public/${normalizedPath}`;
+  }
+
+  return `${baseUrl}/public/storage/${normalizedPath}`;
+};
+
 const axiosClient = axios.create({ baseURL: BASE_URL });
 attachAxiosLogging(axiosClient, 'axiosClient');
 

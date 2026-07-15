@@ -42,7 +42,7 @@ import { normalizeIndianMobileNumber } from '../../utils/phone';
 import FastImage from 'react-native-fast-image';
 import Toast from 'react-native-toast-message';
 import store from '../../components/redux/Store';
-import { BASE_URL, IMAGE_BASE_URL } from '../../api/AxiosClient';
+import { BASE_URL, resolveMediaUrl } from '../../api/AxiosClient';
 import { API_ENDPOINT } from '../../api/ApiUrls';
 import ActionSheet, { ActionSheetRef } from 'react-native-actions-sheet';
 import useLocationHook from '../../api/hooks/uselocationhook';
@@ -54,16 +54,10 @@ import { useFocusEffect } from '@react-navigation/native';
 const requestPermissions = async () => {
   if (Platform.OS !== 'android') return true;
   try {
-    const granted = await PermissionsAndroid.requestMultiple([
+    const granted = await PermissionsAndroid.request(
       PermissionsAndroid.PERMISSIONS.CAMERA,
-      PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
-      PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
-    ]);
-    return (
-      granted['android.permission.CAMERA'] === PermissionsAndroid.RESULTS.GRANTED &&
-      (granted['android.permission.READ_EXTERNAL_STORAGE'] === PermissionsAndroid.RESULTS.GRANTED ||
-        Platform.Version >= 33)
     );
+    return granted === PermissionsAndroid.RESULTS.GRANTED;
   } catch (err) {
     console.warn(err);
     return false;
@@ -149,10 +143,26 @@ const CustomTextInput = ({ placeholder, value, onChangeText, keyboardType = 'def
 
 const AddSecondaryCustomer = ({ navigation, route }: any) => {
   const type = route?.params?.type || 'RETAILER';
-  const customerTypeId = route?.params?.customerTypeId;
-  const customerTypeName = route?.params?.customerTypeName || type;
   const isEdit = !!route?.params?.customer;
   const existingCustomer = route?.params?.customer;
+  const existingCustomerType = existingCustomer?.customertype;
+  const customerTypeId = route?.params?.customerTypeId ||
+    existingCustomer?.customer_type_id ||
+    existingCustomerType?.id ||
+    (typeof existingCustomerType !== 'object' ? existingCustomerType : undefined);
+  const customerTypeName = route?.params?.customerTypeName ||
+    existingCustomer?.customer_type ||
+    existingCustomerType?.customertype_name ||
+    existingCustomerType?.name ||
+    type;
+  const resolvedCustomerType = String(
+    customerTypeName ||
+    type ||
+    existingCustomer?.customer_type ||
+    existingCustomer?.type ||
+    '',
+  ).toLowerCase();
+  const isRetailerCustomer = resolvedCustomerType.includes('retailer');
 
   const [formData, setFormData] = useState<any>({
     type,
@@ -178,6 +188,7 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
     gst_attachment: null,
     pan_attachment: null,
     bank_proof: null,
+    aadhar: null,
     gst_number: '',
     pan_number: '',
     bank_account_type: '',
@@ -211,12 +222,7 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
   const [distributors, setDistributors] = useState<any[]>([]);
   const [cityOptions, setCityOptions] = useState<any[]>([]);
   const [showCityDropdown, setShowCityDropdown] = useState(false);
-  useEffect(() => {
-    loadBeats();
-    loadDistributors();
-  }, []);
-
-  const loadBeats = async () => {
+  const loadBeats = useCallback(async () => {
     try {
       const res = await getBeatList();
       if (res?.data?.status === 'success') {
@@ -228,9 +234,9 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
     } catch (error) {
       console.log('Beat API error', error);
     }
-  };
+  }, [getBeatList]);
 
-  const loadDistributors = async () => {
+  const loadDistributors = useCallback(async () => {
     try {
       const res = await getCustomerTypeList({
         customer_type_id: 1,
@@ -253,7 +259,14 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
     } catch (e) {
       console.log('Distributors fetch error', e);
     }
-  };
+  }, [getCustomerTypeList]);
+
+  useEffect(() => {
+    loadBeats();
+    if (isRetailerCustomer) {
+      loadDistributors();
+    }
+  }, [isRetailerCustomer, loadBeats, loadDistributors]);
 
   const loadPincodesByCity = async (cityId: any) => {
     try {
@@ -440,8 +453,13 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
   };
 
   const pickImage = async (fromCamera = false) => {
-    const hasPermission = await requestPermissions();
-    if (!hasPermission) return;
+    if (fromCamera) {
+      const hasPermission = await requestPermissions();
+      if (!hasPermission) {
+        Toast.show({ type: 'error', text1: 'Camera permission denied' });
+        return;
+      }
+    }
 
     const options: any = {
       mediaType: 'photo' as const,
@@ -580,15 +598,17 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
 
   const getAdditionalCount = () => {
     let count = 0;
-    if (formData.distributor_name) count++;
-    if (formData.beat_id) count++;
+    if (isRetailerCustomer && formData.distributor_name) count++;
     return count;
   };
+
+  const additionalRequiredCount = isRetailerCustomer ? 1 : 0;
 
   const isFormValid =
     getBasicCount() === 3 &&
     getAddressCount() === 5 &&
-    getAdditionalCount() === 2 &&
+    getAdditionalCount() === additionalRequiredCount &&
+    !!formData.shop_photo &&
     isBankInfoValid();
 
   const handleChange = (field: string, value: any) => {
@@ -620,92 +640,46 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
       }
     };
 
-    if (!isEdit) {
-      const mobileNumbers = formData.mobile_numbers.map((num: string) => normalizeIndianMobileNumber(num)).filter(Boolean);
-      const [firstName, ...lastNameParts] = formData.owner_name.trim().split(/\s+/);
-      const parentIds = [formData.distributor_name, formData.agri_distributor].filter(Boolean).join(',');
+    const mobileNumbers = formData.mobile_numbers.map((num: string) => normalizeIndianMobileNumber(num)).filter(Boolean);
+    const [firstName, ...lastNameParts] = formData.owner_name.trim().split(/\s+/);
+    const parentIds = isRetailerCustomer
+      ? [formData.distributor_name, formData.agri_distributor].filter(Boolean).join(',')
+      : '';
 
-      fd.append('mobile', mobileNumbers[0] || '');
-      appendIfPresent('full_name', formData.owner_name);
-      appendIfPresent('first_name', firstName);
-      appendIfPresent('last_name', lastNameParts.join(' '));
-      appendIfPresent('name', formData.shop_name);
-      appendIfPresent('customertype', customerTypeId);
-      appendIfPresent('firmtype', formData.sub_type);
-      appendIfPresent('contact_number', mobileNumbers[1] || mobileNumbers[0]);
-      appendIfPresent('address1', formData.address_line);
-      appendIfPresent('country_id', formData.country_id);
-      appendIfPresent('state_id', formData.state_id);
-      appendIfPresent('district_id', formData.district_id);
-      appendIfPresent('city_id', formData.city_id);
-      appendIfPresent('pincode_id', formData.pincode_id);
-      appendIfPresent('zipcode', pinCode);
-      appendIfPresent('parent_id', parentIds);
-      appendIfPresent('beat_id', formData.beat_id);
-      appendIfPresent('locality', formData.belt_area_market_name);
-      appendIfPresent('latitude', useCurrentLocation ? coords?.latitude : '');
-      appendIfPresent('longitude', useCurrentLocation ? coords?.longitude : '');
-      appendIfPresent('gstin_no', formData.gst_number);
-      appendIfPresent('pan_no', formData.pan_number);
-      appendIfPresent('account_holder', formData.account_holder_name);
-      appendIfPresent('account_number', formData.bank_account_number);
-      appendIfPresent('bank_name', formData.bank_name);
-      appendIfPresent('ifsc_code', formData.ifsc_code);
-      appendIfPresent('status_type', formData.saathi_awareness_status);
+    if (isEdit) appendIfPresent('customer_id', existingCustomer?.customer_id || existingCustomer?.id);
+    fd.append('mobile', mobileNumbers[0] || '');
+    appendIfPresent('full_name', formData.owner_name);
+    appendIfPresent('first_name', firstName);
+    appendIfPresent('last_name', lastNameParts.join(' '));
+    appendIfPresent('name', formData.shop_name);
+    appendIfPresent('customertype', customerTypeId);
+    appendIfPresent('firmtype', formData.sub_type);
+    appendIfPresent('contact_number', mobileNumbers[1] || mobileNumbers[0]);
+    appendIfPresent('address1', formData.address_line);
+    appendIfPresent('country_id', formData.country_id);
+    appendIfPresent('state_id', formData.state_id);
+    appendIfPresent('district_id', formData.district_id);
+    appendIfPresent('city_id', formData.city_id);
+    appendIfPresent('pincode_id', formData.pincode_id);
+    appendIfPresent('zipcode', pinCode);
+    if (isRetailerCustomer) appendIfPresent('parent_id', parentIds);
+    appendIfPresent('beat_id', formData.beat_id);
+    appendIfPresent('locality', formData.belt_area_market_name);
+    appendIfPresent('latitude', useCurrentLocation ? coords?.latitude : existingCustomer?.latitude);
+    appendIfPresent('longitude', useCurrentLocation ? coords?.longitude : existingCustomer?.longitude);
+    appendIfPresent('gstin_no', formData.gst_number);
+    appendIfPresent('pan_no', formData.pan_number);
+    appendIfPresent('account_holder', formData.account_holder_name);
+    appendIfPresent('account_number', formData.bank_account_number);
+    appendIfPresent('bank_name', formData.bank_name);
+    appendIfPresent('ifsc_code', formData.ifsc_code);
+    appendIfPresent('status_type', formData.saathi_awareness_status);
 
-      addPhoto('shopimage', formData.shop_photo);
-      addPhoto('gstin_image', formData.gst_attachment);
-      addPhoto('pan_image', formData.pan_attachment);
-      addPhoto('other_image', formData.bank_proof);
-
-      return fd;
-    }
-
-    fd.append('type', formData.type);
-    fd.append('sub_type', formData.sub_type || '');
-    fd.append('owner_name', formData.owner_name);
-    fd.append('shop_name', formData.shop_name);
-    fd.append('mobile_number', formData.mobile_numbers.join(','));
-    fd.append('address_line', formData.address_line);
-    fd.append('country_id', formData.country_id);
-    fd.append('state_id', formData.state_id);
-    fd.append('district_id', formData.district_id);
-    fd.append('city_id', formData.city_id);
-    fd.append('pincode_id', formData.pincode_id);
-    fd.append('distributor_name', formData.distributor_name);
-    fd.append('agri_distributor', formData.agri_distributor);
-    fd.append('beat_id', formData.beat_id);
-    fd.append('belt_area_market_name', formData.belt_area_market_name || '');
-    fd.append('gps_location', formData.gps_location || '');
-
-    if (formData.type === 'RETAILER') {
-      fd.append('gst_number', formData.gst_number || '');
-      fd.append('pan_number', formData.pan_number || '');
-      fd.append('bank_account_type', formData.bank_account_type || '');
-      fd.append('bank_account_number', formData.bank_account_number || '');
-      fd.append('bank_name', formData.bank_name || '');
-      fd.append('ifsc_code', formData.ifsc_code || '');
-      fd.append('account_holder_name', formData.account_holder_name || '');
-    }
-
-    if (formData.type === 'MECHANIC' || formData.type === 'GARAGE') {
-      fd.append('saathi_awareness_status', formData.saathi_awareness_status || '');
-    }
-
-    const addLegacyPhoto = (key: string, asset: any) => {
-      if (asset?.uri && !asset.uri.startsWith('http')) {
-        fd.append(key, {
-          uri: asset.uri,
-          name: asset.fileName || `photo_${Date.now()}.jpg`,
-          type: asset.type || 'image/jpeg',
-        });
-      }
-    };
-
-    addLegacyPhoto('shop_photo', formData.shop_photo);
-    addLegacyPhoto('gst_attachment', formData.gst_attachment);
-    addLegacyPhoto('pan_attachment', formData.pan_attachment);
-    addLegacyPhoto('bank_proof', formData.bank_proof);
+    addPhoto('shopimage', formData.shop_photo);
+    addPhoto('gstin_image', formData.gst_attachment);
+    addPhoto('pan_image', formData.pan_attachment);
+    addPhoto('other_image', formData.bank_proof);
+    addPhoto('aadhar', formData.aadhar);
 
     return fd;
   };
@@ -719,14 +693,14 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
 
     const token = store.getState().auth?.token;
     const url = isEdit
-      ? `${BASE_URL}api/secondary-customers/${existingCustomer?.id}`
+      ? `${BASE_URL}${API_ENDPOINT.UPDATE_CUSTOMER_PROFILE}`
       : `${BASE_URL}${API_ENDPOINT.STORE_CUSTOMER}`;
     // const payload1 = prepareFormData();
     // console.log(payload1, 'poadkkfjakjsdhfkjas')
     // return
     try {
       const payload = prepareFormData();
-      logFormData(isEdit ? 'Update Secondary Customer' : 'Store Customer', payload);
+      logFormData(isEdit ? 'Update Customer Profile' : 'Store Customer', payload);
       const res = await fetch(url, {
         method: 'POST',
         headers: {
@@ -737,15 +711,21 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
       });
 
       const json = await res.json();
-      const isSuccess = res.ok && (json?.status === true || json?.status === 'success');
+      const responseStatus = String(json?.status ?? '').toLowerCase();
+      const isSuccess = res.ok && (
+        json?.status === true ||
+        responseStatus === 'success' ||
+        responseStatus === '200'
+      );
       if (isSuccess) {
         Toast.show({
           type: 'success',
-          text1: isEdit ? 'Customer updated successfully' : 'Customer added successfully',
+          text1: json?.msg || json?.message || (isEdit ? 'Customer updated successfully' : 'Customer added successfully'),
         });
         navigation.goBack();
       } else {
-        const message = Array.isArray(json?.message) ? json.message.join(', ') : json?.message;
+        const rawMessage = json?.message || json?.msg;
+        const message = Array.isArray(rawMessage) ? rawMessage.join(', ') : rawMessage;
         Toast.show({ type: 'error', text1: message || 'Failed to save' });
       }
     } catch (err) {
@@ -779,43 +759,51 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
 
   useEffect(() => {
     if (isEdit && existingCustomer) {
-      const mobiles = existingCustomer.mobile_number
-        ? existingCustomer.mobile_number
+      const details = existingCustomer.customerdetails || {};
+      const address = existingCustomer.customeraddress || {};
+      const mobileValue = existingCustomer.mobile_number || existingCustomer.mobile || existingCustomer.contact_number || '';
+      const parentIds = Array.isArray(existingCustomer.parent_id)
+        ? existingCustomer.parent_id
+        : String(existingCustomer.parent_id || '').split(',').filter(Boolean);
+      const mobiles = mobileValue
+        ? String(mobileValue)
           .split(',')
           .map((n: string) => normalizeIndianMobileNumber(n))
           .filter(Boolean)
         : [];
-      console.log(existingCustomer.beat_id, 'existingCustomer.beat_id', existingCustomer)
       setFormData({
-        type: existingCustomer.type || type,
-        sub_type: existingCustomer.sub_type || '',
-        owner_name: existingCustomer.owner_name || '',
-        shop_name: existingCustomer.shop_name || '',
+        type: existingCustomer.type || existingCustomer.customer_type || type,
+        sub_type: existingCustomer.sub_type || existingCustomer.firmtype || details.firmtype || '',
+        owner_name: existingCustomer.owner_name || existingCustomer.full_name || details.contact_person || '',
+        shop_name: existingCustomer.shop_name || existingCustomer.name || existingCustomer.legal_name || '',
         mobile_numbers: mobiles,
-        address_line: existingCustomer.address_line || '',
-        country_id: existingCustomer.country_id || '1',
-        state_id: existingCustomer.state_id || '',
-        district_id: existingCustomer.district_id || '',
-        city_id: existingCustomer.city_id || '',
-        pincode_id: existingCustomer.pincode_id || '',
-        distributor_name: existingCustomer.distributor_name || '',
-        agri_distributor: existingCustomer.agri_distributor || '',
-        beat_id: existingCustomer.beat_id,
-        belt_area_market_name: existingCustomer.belt_area_market_name || '',
-        saathi_awareness_status: existingCustomer.saathi_awareness_status || '',
-        shop_photo: existingCustomer.shop_photo ? { uri: `${IMAGE_BASE_URL}public/storage/${existingCustomer.shop_photo}` } : null,
-        gst_number: existingCustomer.gst_number || '',
+        address_line: existingCustomer.address_line || existingCustomer.address1 || address.full_address || '',
+        country_id: existingCustomer.country_id || address.country_id || '1',
+        state_id: existingCustomer.state_id || address.state_id || '',
+        district_id: existingCustomer.district_id || address.district_id || '',
+        city_id: existingCustomer.city_id || address.city_id || '',
+        pincode_id: existingCustomer.pincode_id || address.pincode_id || '',
+        distributor_name: existingCustomer.distributor_name || parentIds[0] || '',
+        agri_distributor: existingCustomer.agri_distributor || parentIds[1] || '',
+        beat_id: existingCustomer.beat_id || '',
+        belt_area_market_name: existingCustomer.belt_area_market_name || existingCustomer.locality || '',
+        saathi_awareness_status: existingCustomer.saathi_awareness_status || existingCustomer.status_type || '',
+        shop_photo: existingCustomer.shop_photo || existingCustomer.shop_image
+          ? { uri: resolveMediaUrl(existingCustomer.shop_photo || existingCustomer.shop_image) }
+          : null,
+        gst_number: existingCustomer.gst_number || existingCustomer.gstin_no || details.gstin_no || '',
         gps_location: existingCustomer.gps_location || '',
-        gst_attachment: existingCustomer.gst_attachment ? { uri: `${IMAGE_BASE_URL}public/storage/${existingCustomer.gst_attachment}` } : null,
-        pan_attachment: existingCustomer.pan_attachment ? { uri: `${IMAGE_BASE_URL}public/storage/${existingCustomer.pan_attachment}` } : null,
-        bank_proof: existingCustomer.bank_proof ? { uri: `${IMAGE_BASE_URL}public/storage/${existingCustomer.bank_proof}` } : null,
-        pan_number: existingCustomer.pan_number || '',
+        gst_attachment: existingCustomer.gst_attachment ? { uri: resolveMediaUrl(existingCustomer.gst_attachment) } : null,
+        pan_attachment: existingCustomer.pan_attachment ? { uri: resolveMediaUrl(existingCustomer.pan_attachment) } : null,
+        bank_proof: existingCustomer.bank_proof ? { uri: resolveMediaUrl(existingCustomer.bank_proof) } : null,
+        aadhar: existingCustomer.aadhar ? { uri: resolveMediaUrl(existingCustomer.aadhar) } : null,
+        pan_number: existingCustomer.pan_number || existingCustomer.pan_no || details.pan_no || '',
         bank_account_type: existingCustomer.bank_account_type || '',
-        bank_account_number: existingCustomer.bank_account_number || '',
-        bank_account_number_confirm: existingCustomer.bank_account_number || '',
-        bank_name: existingCustomer.bank_name || '',
-        ifsc_code: existingCustomer.ifsc_code || '',
-        account_holder_name: existingCustomer.account_holder_name || '',
+        bank_account_number: existingCustomer.bank_account_number || existingCustomer.account_number || details.account_number || '',
+        bank_account_number_confirm: existingCustomer.bank_account_number || existingCustomer.account_number || details.account_number || '',
+        bank_name: existingCustomer.bank_name || details.bank_name || '',
+        ifsc_code: existingCustomer.ifsc_code || details.ifsc_code || '',
+        account_holder_name: existingCustomer.account_holder_name || existingCustomer.account_holder || details.account_holder || '',
       });
       if (existingCustomer.pincode?.pincode) {
         setPincode(existingCustomer.pincode?.pincode || '');
@@ -833,7 +821,7 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
       }
 
     }
-  }, [isEdit, existingCustomer, beats]);
+  }, [isEdit, existingCustomer, beats, type]);
 
 
   const getFirstMissingFieldMessage = () => {
@@ -850,8 +838,10 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
     if (!formData.city_id) return "City is required";
 
     // Additional
-    if (!formData.distributor_name) return "Distributor is required";
-    if (!formData.beat_id) return "Beat is required";
+    if (isRetailerCustomer && !formData.distributor_name) return "Distributor 1 is required";
+
+    // Attachments
+    if (!formData.shop_photo) return "Shop Image is required";
 
     // Bank validation
     if (!isBankInfoValid()) return "Bank account numbers do not match";
@@ -1025,46 +1015,52 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
             </AccordionSection>
 
             <AccordionSection title="Additional Information">
-              <View style={{ alignItems: 'center', marginBottom: 16 }}>
-                <AppText
-                  size={16}
-                  color={getAdditionalCount() === 2 ? '#22C55E' : '#64748B'}
-                  family="InterSemiBold"
-                >
-                  {getAdditionalCount()}/2 completed
-                </AppText>
-              </View>
+              {additionalRequiredCount > 0 && (
+                <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                  <AppText
+                    size={16}
+                    color={getAdditionalCount() === additionalRequiredCount ? '#22C55E' : '#64748B'}
+                    family="InterSemiBold"
+                  >
+                    {getAdditionalCount()}/{additionalRequiredCount} completed
+                  </AppText>
+                </View>
+              )}
               <CustomTextInput
                 placeholder="Belt / Area / Market Name (optional)"
                 value={formData.belt_area_market_name}
                 onChangeText={(v: string) => handleChange('belt_area_market_name', v)}
               />
 
-              <Dropdown
-                style={[styles.selectUser, { padding: 14, marginTop: 12 }]}
-                data={distributors}
-                value={formData.distributor_name}
-                onChange={(item) => handleChange('distributor_name', item.value)}
-                labelField="label"
-                valueField="value"
-                placeholder="Select Domestic Distributor *"
-                placeholderStyle={{ color: 'gray', fontFamily: fonts.InterRegular, fontSize: 14 }}
-                search
-                renderRightIcon={() => <ArrowDownIcon />}
-              />
+              {isRetailerCustomer && (
+                <>
+                  <Dropdown
+                    style={[styles.selectUser, { padding: 14, marginTop: 12 }]}
+                    data={distributors}
+                    value={formData.distributor_name}
+                    onChange={(item) => handleChange('distributor_name', item.value)}
+                    labelField="label"
+                    valueField="value"
+                    placeholder="Select Distributor 1 *"
+                    placeholderStyle={{ color: 'gray', fontFamily: fonts.InterRegular, fontSize: 14 }}
+                    search
+                    renderRightIcon={() => <ArrowDownIcon />}
+                  />
 
-              <Dropdown
-                style={[styles.selectUser, { padding: 14, marginTop: 12 }]}
-                data={distributors} // ← using same list; change if different API
-                value={formData.agri_distributor}
-                onChange={(item) => handleChange('agri_distributor', item.value)}
-                labelField="label"
-                valueField="value"
-                placeholder="Select Agri Distributor (optional)"
-                placeholderStyle={{ color: 'gray', fontFamily: fonts.InterRegular, fontSize: 14 }}
-                search
-                renderRightIcon={() => <ArrowDownIcon />}
-              />
+                  <Dropdown
+                    style={[styles.selectUser, { padding: 14, marginTop: 12 }]}
+                    data={distributors}
+                    value={formData.agri_distributor}
+                    onChange={(item) => handleChange('agri_distributor', item.value)}
+                    labelField="label"
+                    valueField="value"
+                    placeholder="Select Distributor 2 (optional)"
+                    placeholderStyle={{ color: 'gray', fontFamily: fonts.InterRegular, fontSize: 14 }}
+                    search
+                    renderRightIcon={() => <ArrowDownIcon />}
+                  />
+                </>
+              )}
 
               <Dropdown
                 style={[styles.selectUser, { padding: 14, marginTop: 12 }]}
@@ -1073,7 +1069,7 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
                 onChange={(item) => handleChange('beat_id', item.value)}
                 labelField="label"
                 valueField="value"
-                placeholder="Select Beat *"
+                placeholder="Select Beat (optional)"
                 placeholderStyle={{ color: 'gray', fontFamily: fonts.InterRegular, fontSize: 14 }}
                 renderRightIcon={() => <ArrowDownIcon />}
               />
@@ -1178,10 +1174,10 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
             <AccordionSection title="Attachments">
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
                 <ImageUploadBox
-                  label={`Shop Photo ${"\n"}(optional)`}
+                  label="Shop Image"
                   field="shop_photo"
                   value={formData.shop_photo}
-                  // required
+                  required
                   existingUri={isEdit ? formData.shop_photo?.uri : null}
                 />
                 <ImageUploadBox
@@ -1201,6 +1197,12 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
                   field="bank_proof"
                   value={formData.bank_proof}
                   existingUri={isEdit ? formData.bank_proof?.uri : null}
+                />
+                <ImageUploadBox
+                  label="Aadhaar Card (optional)"
+                  field="aadhar"
+                  value={formData.aadhar}
+                  existingUri={isEdit ? formData.aadhar?.uri : null}
                 />
               </View>
             </AccordionSection>

@@ -365,18 +365,11 @@ const Home = () => {
     console.log('Selected customer type:', type);
 
     if (pressType == 'add') {
-      if (isDistributorType(type.value)) {
-        navigation.navigate('AddCustomer', {
-          customerTypeId: type.customerTypeId,
-          customerTypeName: type.title,
-        })
-      } else {
-        navigation.navigate('AddSecondaryCustomer', {
-          type: type.value,
-          customerTypeId: type.customerTypeId,
-          customerTypeName: type.title,
-        })
-      }
+      navigation.navigate('AddSecondaryCustomer', {
+        type: type.value,
+        customerTypeId: type.customerTypeId,
+        customerTypeName: type.title,
+      })
     } else {
       navigation.navigate("CustomerList", {
         customerTypeId: type.customerTypeId,

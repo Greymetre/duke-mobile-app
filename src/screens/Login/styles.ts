@@ -10,7 +10,7 @@ export const styles = StyleSheet.create({
         backgroundColor: colors.blue
     },
     logoView:{
-        height: SCREEN_HEIGHT * 0.3
+        height: SCREEN_HEIGHT * 0.35
     },
     subContainer:{
         flex: 1,
@@ -21,8 +21,13 @@ export const styles = StyleSheet.create({
     },
     logo:{
         height: 55,
+        marginTop: 58,
         width: "100%",
-        bottom: -15
+    },
+    dukeLogo:{
+        width: 80,
+        height: 49,
+        marginTop: 28,
     },
     center:{
         justifyContent:"center",

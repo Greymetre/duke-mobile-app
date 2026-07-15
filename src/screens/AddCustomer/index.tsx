@@ -63,19 +63,10 @@ const requestPermissions = async () => {
         }
       );
 
-      const storage = await PermissionsAndroid.requestMultiple([
-        PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
-        PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
-      ]);
-
-      if (
-        camera === PermissionsAndroid.RESULTS.GRANTED &&
-        (storage['android.permission.READ_EXTERNAL_STORAGE'] === PermissionsAndroid.RESULTS.GRANTED ||
-          Platform.Version >= 33)
-      ) {
+      if (camera === PermissionsAndroid.RESULTS.GRANTED) {
         return true;
       } else {
-        Toast.show({ type: 'error', text1: 'Permissions denied' });
+        Toast.show({ type: 'error', text1: 'Camera permission denied' });
         return false;
       }
     } catch (err) {
@@ -754,7 +745,7 @@ console.log(billingPincode,'sksk');
         maxWidth: 1200,
         maxHeight: 1200,
         quality: 1,           // ← slightly lower than 1 to save space/bandwidth
-        saveToPhotos: true,      // optional – saves to gallery (good UX)
+        saveToPhotos: false,
         cameraType: 'back',      // or 'front' – you can make dynamic if needed
         // Note: selectionLimit has NO EFFECT in launchCamera – it's always single capture
       },

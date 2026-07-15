@@ -23,7 +23,7 @@ import { AddToCartIcon, ArrowCardDownIcon, CheckIcon, CrossIconCard, EmailIcon, 
 import AppText from '../AppText/AppText';
 import { rw } from '../../utils/responsive';
 import { SCREEN_WIDTH } from '../../utils/misc';
-import { BASE_URL, IMAGE_BASE_URL } from '../../api/AxiosClient';
+import { resolveMediaUrl } from '../../api/AxiosClient';
 import FastImage from 'react-native-fast-image';
 import { useGetSubmitCheckIN } from '../../api/query/CustomerApi';
 import Toast from 'react-native-toast-message';
@@ -38,6 +38,10 @@ interface SolarCardProps {
     company?: string;
     address?: string;
     imageUrl: any;
+    shop_photo?: string;
+    shop_image?: string;
+    owner_photo?: string;
+    profile_image?: string;
   };
   navigation?: any
   currentLat?: any;
@@ -68,6 +72,9 @@ const SecondaryCustomerCard: React.FC<SolarCardProps> = ({
   isPunchedIn,
   type
 }) => {
+  const customerImage = resolveMediaUrl(
+    item?.shop_photo || item?.shop_image || item?.owner_photo || item?.profile_image,
+  );
   const [isExpanded, setIsExpanded] = useState(false);
   const animationHeight = useSharedValue(0);
   const [newCheckInData, setNewCheckInData] = useState<boolean>(false)
@@ -357,18 +364,13 @@ const SecondaryCustomerCard: React.FC<SolarCardProps> = ({
     <Pressable style={[styles.cardContainer, shadowStyle]} onPress={() => navigation?.navigate("CustomerDetails", { item: item, type: "secondary", isPunchedIn: isPunchedIn })}>
       {
         !type && (
-          <>
-            <FastImage
-              source={require('../../assets/images/Dummy/Customer2.png')}
-              style={[styles.mainImage, { position: 'absolute', top: 14, left: 12 }]}
-              resizeMode="cover"
-            />
-            <FastImage
-              source={{ uri: `${IMAGE_BASE_URL}/public/storage/${item?.shop_photo}` }}
-              style={styles.mainImage}
-              resizeMode="cover"
-            />
-          </>
+          <FastImage
+            source={customerImage
+              ? { uri: customerImage }
+              : require('../../assets/images/Dummy/Customer2.png')}
+            style={styles.mainImage}
+            resizeMode="cover"
+          />
         )
       }
 

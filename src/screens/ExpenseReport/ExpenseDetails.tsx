@@ -1,7 +1,10 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Toast from 'react-native-toast-message';
+import Gallery from 'react-native-awesome-gallery';
+import Pdf from 'react-native-pdf';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AppText from '../../components/AppText/AppText';
 import { useAppSelector } from '../../components/redux/Store';
 import { approveExpenseApi, getExpenseDetailsApi, rejectExpenseApi } from '../../api/query/ExpenseApi';
@@ -15,7 +18,8 @@ const STATUS_OPTIONS = [
   { label: 'Approved', value: 1 },
   { label: 'Rejected', value: 2 },
   { label: 'Checked', value: 3 },
-  { label: 'Approved', value: 4 },
+  { label: 'Checked By Reporting', value: 4 },
+  { label: 'Hold', value: 5 },
 ];
 
 const statusLabel = (status: any) => {
@@ -24,9 +28,11 @@ const statusLabel = (status: any) => {
 };
 
 const statusColor = (status: any) => {
-  if (String(status) === '1' || String(status) === '4') return '#1E8E3E';
-  if (String(status).toLowerCase() === 'approved' || String(status).toLowerCase() === 'checked by reporting') return '#1E8E3E';
+  if (String(status) === '1') return '#1E8E3E';
+  if (String(status).toLowerCase() === 'approved') return '#1E8E3E';
   if (String(status) === '2' || String(status).toLowerCase() === 'rejected') return '#D93025';
+  if (String(status) === '4' || String(status).toLowerCase() === 'checked by reporting') return '#168AAD';
+  if (String(status) === '3' || String(status) === '5') return '#4A5568';
   return '#D98324';
 };
 
@@ -38,7 +44,12 @@ const rateMoney = (value: any) =>
 const displayValue = (value: any, fallback = 'NA') =>
   value === null || value === undefined || value === '' ? fallback : value;
 
-const getExpenseStatus = (item: any) => item?.checker_status ?? item?.status ?? 0;
+const normalizeStatusText = (status: any) => String(status ?? '').trim().toLowerCase();
+
+const getExpenseStatus = (item: any) =>
+  item?.checker_status !== null && item?.checker_status !== undefined && item?.checker_status !== ''
+    ? item.checker_status
+    : item?.status ?? 0;
 
 const formatDate = (date: any) => {
   if (!date || typeof date !== 'string') return 'NA';
@@ -63,11 +74,27 @@ const getAttachmentItems = (item: any) => {
     ? item.image_id
     : item?.image_id ? [item.image_id] : [];
 
-  return files.map((uri: string, index: number) => ({
-    uri,
+  return files.map((file: any, index: number) => ({
+    uri: typeof file === 'string'
+      ? file
+      : file?.uri || file?.url || file?.path || file?.file_url || '',
     id: ids[index],
-    name: `Attachment ${index + 1}`,
-  }));
+    name: typeof file === 'object'
+      ? file?.name || file?.file_name || `Attachment ${index + 1}`
+      : `Attachment ${index + 1}`,
+    mimeType: typeof file === 'object' ? file?.type || file?.mime_type || '' : '',
+  })).filter((file: any) => Boolean(file.uri));
+};
+
+const isPdfAttachment = (file: any) => {
+  if (String(file?.mimeType || '').toLowerCase().includes('pdf')) return true;
+
+  const uriWithoutQuery = String(file?.uri || '').split(/[?#]/)[0];
+  try {
+    return decodeURIComponent(uriWithoutQuery).toLowerCase().endsWith('.pdf');
+  } catch {
+    return uriWithoutQuery.toLowerCase().endsWith('.pdf');
+  }
 };
 
 const getFirstValue = (source: any, paths: string[]) => {
@@ -78,6 +105,22 @@ const getFirstValue = (source: any, paths: string[]) => {
 
   return '';
 };
+
+const getExpenseDecisionReason = (item: any) => getFirstValue(item, [
+  'reason',
+  'reasons',
+  'approval_reason',
+  'rejection_reason',
+  'approve_reason',
+  'reject_reason',
+  'approval_remark',
+  'rejection_remark',
+  'checker_reason',
+  'latest_approval.reason',
+  'last_approval.reason',
+  'approval.reason',
+  'approval.reasons',
+]);
 
 const normalizeNumericInput = (value: string) => {
   const devanagariDigits = '०१२३४५६७८९';
@@ -109,9 +152,10 @@ const SectionTitle = ({ children }: any) => (
 );
 
 const ExpenseDetails = ({ navigation, route }: any) => {
+  const insets = useSafeAreaInsets();
   const routeExpense = route?.params?.expense;
   const mode = route?.params?.mode;
-  const { user } = useAppSelector((state) => state.auth);
+  const { user, token } = useAppSelector((state) => state.auth);
 
   const [expense, setExpense] = useState<any>(routeExpense || null);
   const [loading, setLoading] = useState(false);
@@ -119,14 +163,18 @@ const ExpenseDetails = ({ navigation, route }: any) => {
   const [decision, setDecision] = useState<'approve' | 'reject'>('approve');
   const [approveAmount, setApproveAmount] = useState(String(routeExpense?.claim_amount || ''));
   const [reason, setReason] = useState('');
+  const [previewAttachment, setPreviewAttachment] = useState<any>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState('');
+  const [pdfPage, setPdfPage] = useState(1);
+  const [pdfPages, setPdfPages] = useState(0);
 
   const expenseId = routeExpense?.id || route?.params?.expense_id;
   const currentStatus = getExpenseStatus(expense);
-  const isApproved = String(currentStatus) === '1' ||
-    String(currentStatus) === '4' ||
-    String(currentStatus).toLowerCase() === 'approved' ||
-    String(currentStatus).toLowerCase() === 'checked by reporting';
-  const isRejected = String(currentStatus) === '2' || String(currentStatus).toLowerCase() === 'rejected';
+  const normalizedCurrentStatus = normalizeStatusText(currentStatus);
+  const isApproved = normalizedCurrentStatus === '1' || normalizedCurrentStatus === 'approved';
+  const isRejected = normalizedCurrentStatus === '2' || normalizedCurrentStatus === 'rejected';
+  const isChecked = normalizedCurrentStatus === '3' || normalizedCurrentStatus === 'checked';
   const hasReading = !!displayValue(expense?.start_km, '') || !!displayValue(expense?.stop_km, '');
 
   const isOwnExpense = useMemo(() => {
@@ -140,12 +188,27 @@ const ExpenseDetails = ({ navigation, route }: any) => {
 
   const canShowApproval =
     !isOwnExpense &&
-    (String(currentStatus) === '0' || String(currentStatus || '').toLowerCase() === 'pending');
+    (normalizedCurrentStatus === '0' || normalizedCurrentStatus === 'pending' || isChecked);
   const canEditExpense =
     isOwnExpense &&
     (String(currentStatus) === '0' || String(currentStatus || '').toLowerCase() === 'pending');
   const showApprovalDecision = !canShowApproval && (isApproved || isRejected);
   const attachmentItems = getAttachmentItems(expense);
+  const decisionReason = getExpenseDecisionReason(expense);
+
+  const openAttachmentPreview = (file: any) => {
+    setPreviewError('');
+    setPreviewLoading(true);
+    setPdfPage(1);
+    setPdfPages(0);
+    setPreviewAttachment(file);
+  };
+
+  const closeAttachmentPreview = () => {
+    setPreviewAttachment(null);
+    setPreviewLoading(false);
+    setPreviewError('');
+  };
 
   const employeeCode = getFirstValue(expense, [
     'employee_code',
@@ -218,8 +281,11 @@ const ExpenseDetails = ({ navigation, route }: any) => {
       Toast.show({ type: 'error', text1: 'Approve amount cannot be greater than claim amount' });
       return;
     }
-    if (decision === 'reject' && !reason.trim()) {
-      Toast.show({ type: 'error', text1: 'Please enter rejection reason' });
+    if (!reason.trim()) {
+      Toast.show({
+        type: 'error',
+        text1: decision === 'approve' ? 'Please enter reporting check reason' : 'Please enter rejection reason',
+      });
       return;
     }
 
@@ -230,6 +296,7 @@ const ExpenseDetails = ({ navigation, route }: any) => {
           expense_id: expense.id,
           approve_amnt: approveAmount,
           reasons: reason.trim(),
+          reason: reason.trim(),
         })
         : await rejectExpenseApi({
           expense_id: expense.id,
@@ -240,7 +307,7 @@ const ExpenseDetails = ({ navigation, route }: any) => {
       if (res?.data?.status === true || res?.data?.status === 'success') {
         Toast.show({
           type: 'success',
-          text1: decision === 'approve' ? 'Expense approved' : 'Expense rejected',
+          text1: decision === 'approve' ? 'Expense checked by reporting' : 'Expense rejected',
         });
         navigation.goBack();
       } else {
@@ -336,11 +403,11 @@ const ExpenseDetails = ({ navigation, route }: any) => {
           <AppText size={15} color="#202432" family="InterMedium">
             {expense?.note || 'NA'}
           </AppText>
-          {!!expense?.reason && (
+          {!!decisionReason && (isApproved || isRejected) && (
             <View style={styles.detailReasonBlock}>
               <SectionTitle>REASON</SectionTitle>
               <AppText size={15} color="#202432" family="InterMedium">
-                {expense.reason}
+                {decisionReason}
               </AppText>
             </View>
           )}
@@ -353,7 +420,7 @@ const ExpenseDetails = ({ navigation, route }: any) => {
               <Pressable
                 key={`${file.uri}-${index}`}
                 style={styles.detailAttachmentRow}
-                onPress={() => Linking.openURL(file.uri)}
+                onPress={() => openAttachmentPreview(file)}
               >
                 <AppText size={14} color="#202432" family="InterSemiBold" numLines={1}>
                   {file.name}
@@ -389,8 +456,8 @@ const ExpenseDetails = ({ navigation, route }: any) => {
                 <View style={[styles.approvalRadio, decision === 'approve' && styles.approvalRadioApprove]}>
                   {decision === 'approve' && <View style={styles.approvalRadioDot} />}
                 </View>
-                <AppText size={16} family="InterBold" color="#1E8E3E">
-                  Approved
+                <AppText size={16} family="InterBold" color="#168AAD">
+                  Checked By Reporting
                 </AppText>
               </Pressable>
               <Pressable style={styles.approvalChoice} onPress={() => setDecision('reject')}>
@@ -421,11 +488,11 @@ const ExpenseDetails = ({ navigation, route }: any) => {
             )}
 
             <AppText size={14} color="#202432" family="InterBold" style={styles.approvalRemarkLabel}>
-              {decision === 'reject' ? 'Reject Reason' : 'Remark'}
+              {decision === 'reject' ? 'Rejection Reason' : 'Reporting Check Reason'}
             </AppText>
             <TextInput
               style={styles.textArea}
-              placeholder={decision === 'reject' ? 'Enter rejection reason' : 'Enter remark'}
+              placeholder={decision === 'reject' ? 'Enter rejection reason' : 'Enter reporting check reason'}
               placeholderTextColor="#718096"
               multiline
               value={reason}
@@ -444,6 +511,97 @@ const ExpenseDetails = ({ navigation, route }: any) => {
 
         <View style={{ height: 60 }} />
       </ScrollView>
+
+      <Modal
+        visible={Boolean(previewAttachment)}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={closeAttachmentPreview}
+      >
+        <View style={styles.attachmentPreviewModal}>
+          <View style={[styles.attachmentPreviewHeader, { paddingTop: insets.top + 8 }]}>
+            <AppText
+              size={16}
+              color="white"
+              family="InterBold"
+              numLines={1}
+              style={styles.attachmentPreviewTitle}
+            >
+              {previewAttachment?.name || 'Attachment'}
+            </AppText>
+            {isPdfAttachment(previewAttachment) && pdfPages > 0 && (
+              <AppText size={13} color="#D8DCE8" family="InterSemiBold">
+                {pdfPage} / {pdfPages}
+              </AppText>
+            )}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close attachment preview"
+              hitSlop={12}
+              style={styles.attachmentPreviewClose}
+              onPress={closeAttachmentPreview}
+            >
+              <AppText size={25} color="white" family="InterBold">✕</AppText>
+            </Pressable>
+          </View>
+
+          <View style={styles.attachmentPreviewContent}>
+            {previewAttachment && isPdfAttachment(previewAttachment) ? (
+              <Pdf
+                source={{
+                  uri: previewAttachment.uri,
+                  cache: true,
+                  headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+                }}
+                style={styles.attachmentPdf}
+                trustAllCerts={false}
+                enablePaging={false}
+                enableDoubleTapZoom
+                onLoadComplete={(numberOfPages) => {
+                  setPdfPages(numberOfPages);
+                  setPreviewLoading(false);
+                }}
+                onPageChanged={(page, numberOfPages) => {
+                  setPdfPage(page);
+                  setPdfPages(numberOfPages);
+                }}
+                onError={(error) => {
+                  console.log('Expense PDF preview error:', error);
+                  setPreviewLoading(false);
+                  setPreviewError('Unable to display this PDF.');
+                }}
+              />
+            ) : previewAttachment ? (
+              <Gallery
+                data={[previewAttachment.uri]}
+                style={styles.attachmentImageGallery}
+                pinchEnabled
+                doubleTapEnabled
+                doubleTapScale={2.5}
+                maxScale={6}
+                disableSwipeUp
+                disableVerticalSwipe
+                onIndexChange={() => setPreviewLoading(false)}
+              />
+            ) : null}
+
+            {previewLoading && isPdfAttachment(previewAttachment) && (
+              <View style={styles.attachmentPreviewLoader}>
+                <ActivityIndicator size="large" color="white" />
+              </View>
+            )}
+
+            {!!previewError && (
+              <View style={styles.attachmentPreviewLoader}>
+                <AppText size={15} color="white" family="InterSemiBold" align="center">
+                  {previewError}
+                </AppText>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };

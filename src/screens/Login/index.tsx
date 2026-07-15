@@ -1,6 +1,5 @@
-import { View, TextInput, Pressable, ScrollView, ActivityIndicator, Platform } from 'react-native';
+import { View, TextInput, Pressable, ActivityIndicator, Platform } from 'react-native';
 import React, { useState } from 'react';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import FastImage from 'react-native-fast-image';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
@@ -47,7 +46,7 @@ const getDeviceName = () => {
 const LoginScreen = ({ navigation }: { navigation: any }) => {
   const dispatch = useDispatch();
   const { mutateAsync: mutateLogin } = useMutateLogin();
-  const [serverError, setServerError] = useState<string | null>(null);
+  const [_serverError, setServerError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false); // ← new state
 
   const validationSchema = Yup.object().shape({
@@ -87,7 +86,9 @@ const LoginScreen = ({ navigation }: { navigation: any }) => {
         Toast.show({ type: 'success', text1: res?.data?.message || 'Login successful', visibilityTime: 5000 });
 
         dispatch(setToken(res?.data?.userinfo?.access_token));
-        void initializeLiveLocationTracking();
+        void initializeLiveLocationTracking().catch(error => {
+          console.warn('Live location initialization failed:', error);
+        });
         resetForm();
         navigation.replace('BottomTab');
       } else {
@@ -131,6 +132,11 @@ const LoginScreen = ({ navigation }: { navigation: any }) => {
             style={styles.logo}
             resizeMode="contain"
             source={require('../../assets/images/FieldKonnectLogo.png')}
+          />
+          <FastImage
+            style={styles.dukeLogo}
+            resizeMode="contain"
+            source={require('../../assets/images/duke_logo_new.png')}
           />
         </View>
 

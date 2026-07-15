@@ -30,6 +30,20 @@ interface VisitType {
 
 const VisitReport: React.FC<VisitReportProps> = ({ navigation, route }) => {
   const { checkin_id, entity_type, entity_id, latitude, longitude, customerData } = route.params || {};
+  const customerDetails = customerData?.customerdetails || customerData?.customer_details || {};
+  const customerName = [
+    customerData?.legal_name,
+    customerData?.shop_name,
+    customerData?.name,
+    customerData?.customer_name,
+    customerData?.full_name,
+    customerDetails?.legal_name,
+    customerDetails?.shop_name,
+    customerDetails?.name,
+    [customerData?.first_name, customerData?.last_name].filter(Boolean).join(' '),
+    customerData?.owner_name,
+    customerData?.contact_person,
+  ].find((value) => typeof value === 'string' && value.trim())?.trim() || 'Unknown';
   const [description, setDescription] = useState('');
   const [visitType, setVisitType] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -180,7 +194,7 @@ const VisitReport: React.FC<VisitReportProps> = ({ navigation, route }) => {
         {/* Optional: Show customer name */}
         {customerData && (
           <AppText size={16} color="#555">
-            Customer: {customerData?.legal_name || customerData?.shop_name || 'Unknown'}
+            Customer: {customerName}
           </AppText>
         )}
 

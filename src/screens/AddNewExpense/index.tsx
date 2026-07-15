@@ -1,7 +1,7 @@
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { NavigationProp, ParamListBase, useNavigation, useRoute } from '@react-navigation/native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { ActivityIndicator, PermissionsAndroid, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { Dropdown } from 'react-native-element-dropdown';
 import { Asset, launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import Toast from 'react-native-toast-message';
@@ -196,7 +196,17 @@ const AddNewExpense = () => {
     });
   };
 
-  const pickAttachmentFromCamera = () => {
+  const pickAttachmentFromCamera = async () => {
+    if (Platform.OS === 'android') {
+      const permission = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.CAMERA,
+      );
+      if (permission !== PermissionsAndroid.RESULTS.GRANTED) {
+        Toast.show({ type: 'error', text1: 'Camera permission denied' });
+        return;
+      }
+    }
+
     launchCamera({
       mediaType: 'photo',
       saveToPhotos: false,
