@@ -15,7 +15,7 @@ import ICEye from '../../assets/svgs/eye';
 import Toast from 'react-native-toast-message';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { initializeLiveLocationTracking } from '../../services/liveLocationService';
-import appPackage from '../../../package.json';
+import { ANDROID_APP_VERSION } from '../../utils/appVersion';
 
 type LoginFormValues = {
   email: string;
@@ -24,9 +24,9 @@ type LoginFormValues = {
 
 const APP_VERSION =
   Platform.select({
-    android: '1.1',
+    android: ANDROID_APP_VERSION,
     ios: '2.3',
-  }) || appPackage.version;
+  }) || ANDROID_APP_VERSION;
 
 const getDeviceName = () => {
   const constants = Platform.constants as Record<string, any>;

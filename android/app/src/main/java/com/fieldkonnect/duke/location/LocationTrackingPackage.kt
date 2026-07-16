@@ -7,7 +7,10 @@ import com.facebook.react.uimanager.ViewManager
 
 class LocationTrackingPackage : ReactPackage {
   override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> =
-    listOf(LocationTrackingModule(reactContext))
+    listOf(
+      LocationTrackingModule(reactContext),
+      AppInfoModule(reactContext),
+    )
 
   override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> =
     emptyList()

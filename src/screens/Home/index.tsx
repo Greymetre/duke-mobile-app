@@ -35,6 +35,7 @@ import RetailersOverviewCard from '../../components/atoms/RetailersOverviewCard'
 import TopProductsCard from '../../components/atoms/TopProductsCard'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { startLiveLocationTracking, stopLiveLocationTracking } from '../../services/liveLocationService'
+import { ANDROID_APP_VERSION, compareVersions } from '../../utils/appVersion'
 
 interface DropdownItem {
   label: string;
@@ -665,7 +666,7 @@ const Home = () => {
       const CURRENT_VERSION =
         Platform.OS === 'ios'
           ? '1.1'
-          : '1.1';
+          : ANDROID_APP_VERSION;
 
       // ======================================
       // SERVER VERSION
@@ -681,10 +682,7 @@ const Home = () => {
       // ======================================
       // VERSION CHECK
       // ======================================
-      if (
-        SERVER_VERSION &&
-        SERVER_VERSION != CURRENT_VERSION
-      ) {
+      if (SERVER_VERSION && compareVersions(SERVER_VERSION, CURRENT_VERSION) > 0) {
 
         navigation.reset({
           index: 0,
