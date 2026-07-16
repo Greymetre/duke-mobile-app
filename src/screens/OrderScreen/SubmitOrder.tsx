@@ -195,8 +195,37 @@ const isRetailerType = (typeId: any, typeName: any, retailerId?: number | string
 
 const isDistributorOrDealerType = (typeName: any) => {
     const normalized = String(typeName || '').toLowerCase();
-    return normalized.includes('distributor') || normalized.includes('dealer');
+    const isDealerOrDistributor = normalized.includes('distributor') || normalized.includes('dealer');
+    const isOldCustomerType = normalized.includes('master') || normalized.includes('secondary');
+    return isDealerOrDistributor && !isOldCustomerType;
 };
+
+const normalizeParentCustomerIds = (...sources: any[]): string[] => {
+    const ids = sources.flatMap((source) => {
+        if (source == null || source === '') return [];
+        if (Array.isArray(source)) return normalizeParentCustomerIds(...source);
+        if (typeof source === 'object') {
+            const id = source?.customer_id ?? source?.parent_id ?? source?.id ?? source?.value;
+            return id == null ? [] : [String(id)];
+        }
+        return String(source).split(',').map(value => value.trim()).filter(Boolean);
+    });
+
+    return ids.filter((id, index) => ids.indexOf(id) === index);
+};
+
+const getAssignedParentIds = (customer: any): string[] => normalizeParentCustomerIds(
+    customer?.customer ? getAssignedParentIds(customer.customer) : [],
+    customer?.parent_id,
+    customer?.parent_ids,
+    customer?.parent_customer_ids,
+    customer?.parent_customers,
+    customer?.parents,
+    customer?.distributors,
+    customer?.distributor_id,
+    customer?.distributor_name,
+    customer?.agri_distributor,
+);
 
 const SubmitOrder = () => {
     const route = useRoute();
@@ -219,6 +248,9 @@ const SubmitOrder = () => {
     const [selectedCustomerTypeId, setSelectedCustomerTypeId] = useState<number | string | null>(routeCustomerTypeId || null);
     const [selectedCustomerTypeName, setSelectedCustomerTypeName] = useState<string>(type || routeData?.customer_type || '');
     const [selectedDistributor, setSelectedDistributor] = useState<number | string | null>(null);
+    const [assignedParentIds, setAssignedParentIds] = useState<string[]>(
+        getAssignedParentIds(routeData),
+    );
     const [remark, setRemark] = useState('');
 
 
@@ -289,14 +321,48 @@ const SubmitOrder = () => {
         }
     }, []);
 
+    const fetchAssignedParentsForRetailer = useCallback(async (
+        customerId: number | string,
+        fallbackCustomer?: any,
+    ) => {
+        const fallbackIds = normalizeParentCustomerIds(
+            ...getAssignedParentIds(routeData),
+            ...getAssignedParentIds(fallbackCustomer),
+        );
+        setAssignedParentIds(fallbackIds);
+
+        try {
+            const response = await axiosClient.get(API_ENDPOINT.GET_CUSTOMER_INFO, {
+                params: { customer_id: customerId },
+            });
+            const responsePayload = response?.data;
+            const ids = normalizeParentCustomerIds(
+                ...fallbackIds,
+                ...getAssignedParentIds(responsePayload),
+                ...getAssignedParentIds(responsePayload?.data),
+            );
+            setAssignedParentIds(ids);
+        } catch (error) {
+            console.log('Retailer parent customer info error', error);
+        }
+    }, [routeData]);
+
     const fetchCustomersForSelectedType = useCallback(async (customerTypeId?: number | string) => {
         const formatted = await getCustomersByType(customerTypeId);
         setRetailerList(formatted);
 
         if (routeBuyerId && (!routeCustomerTypeId || isSameId(customerTypeId, routeCustomerTypeId))) {
             setSelectedRetailer(routeBuyerId);
+            const routeCustomer = formatted.find((item: DropdownItem) => isSameId(item.value, routeBuyerId));
+            setAssignedParentIds(
+                normalizeParentCustomerIds(
+                    ...getAssignedParentIds(routeData),
+                    ...getAssignedParentIds(routeCustomer?.raw),
+                ),
+            );
+            fetchAssignedParentsForRetailer(routeBuyerId, routeCustomer?.raw);
         }
-    }, [getCustomersByType, routeBuyerId, routeCustomerTypeId]);
+    }, [fetchAssignedParentsForRetailer, getCustomersByType, routeBuyerId, routeCustomerTypeId, routeData]);
 
     const fetchDistributorDealerOptions = useCallback(async () => {
         const sellerTypeIds = customerTypeList
@@ -318,10 +384,22 @@ const SubmitOrder = () => {
         });
 
         setDistributorList(merged);
-        if (distributorId) {
-            setSelectedDistributor(Number(distributorId));
+    }, [customerTypeList, getCustomersByType]);
+
+    useEffect(() => {
+        if (!selectedCustomerIsRetailer || selectedDistributor || !distributorList.length) return;
+
+        const firstAssignedParent = assignedParentIds.find((parentId) =>
+            distributorList.some((option) => isSameId(option.value, parentId)),
+        );
+
+        if (firstAssignedParent) {
+            const matchedOption = distributorList.find((option) =>
+                isSameId(option.value, firstAssignedParent),
+            );
+            setSelectedDistributor(matchedOption?.value || null);
         }
-    }, [customerTypeList, distributorId, getCustomersByType]);
+    }, [assignedParentIds, distributorList, selectedCustomerIsRetailer, selectedDistributor]);
 
     useEffect(() => {
         fetchCustomerTypes();
@@ -583,7 +661,11 @@ const SubmitOrder = () => {
                             setSelectedRetailer(item.value);
                             setSelectedCustomerTypeId(item.customerTypeId || selectedCustomerTypeId);
                             setSelectedCustomerTypeName(item.customerTypeName || selectedCustomerTypeName);
+                            setAssignedParentIds(getAssignedParentIds(item.raw));
                             setSelectedDistributor(null);
+                            if (selectedCustomerIsRetailer) {
+                                fetchAssignedParentsForRetailer(item.value, item.raw);
+                            }
                         }}
                         renderRightIcon={() => <ArrowDownIcon />}
                     />

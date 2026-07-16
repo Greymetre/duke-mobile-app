@@ -32,23 +32,13 @@ import { normalizeIndianMobileNumber } from '../../utils/phone';
 const { width } = Dimensions.get('window');
 
 interface SolarCardProps {
-  item: {
-    rating?: string;
-    type?: string;
-    company?: string;
-    address?: string;
-    imageUrl: any;
-    shop_photo?: string;
-    shop_image?: string;
-    owner_photo?: string;
-    profile_image?: string;
-  };
+  item: any;
   navigation?: any
   currentLat?: any;
   currentLng?: any;
   locationError?: any;
   index?: number
-  type?: string;
+  type?: any;
   isPunchedIn?: any
   locationLoading?: any;
   onViewPress?: () => void;
@@ -75,6 +65,22 @@ const SecondaryCustomerCard: React.FC<SolarCardProps> = ({
   const customerImage = resolveMediaUrl(
     item?.shop_photo || item?.shop_image || item?.owner_photo || item?.profile_image,
   );
+  const customerName =
+    item?.shop_name ||
+    item?.legal_name ||
+    item?.name ||
+    item?.customer_name ||
+    [item?.first_name, item?.last_name].filter(Boolean).join(' ') ||
+    type?.entity_name ||
+    '-';
+  const customerAddress =
+    item?.address_line ||
+    item?.shipping_address ||
+    item?.billing_address ||
+    item?.full_address ||
+    item?.customeraddress?.full_address ||
+    type?.checkin_address ||
+    '-';
   const [isExpanded, setIsExpanded] = useState(false);
   const animationHeight = useSharedValue(0);
   const [newCheckInData, setNewCheckInData] = useState<boolean>(false)
@@ -393,10 +399,10 @@ const SecondaryCustomerCard: React.FC<SolarCardProps> = ({
       </TouchableOpacity> */}
       <View style={styles.infoContainer}>
         <Text style={styles.companyName} numberOfLines={2}>
-          {item?.shop_name}
+          {customerName}
         </Text>
         <Text style={styles.address} numberOfLines={2}>
-          {item?.address_line}
+          {customerAddress}
         </Text>
       </View>
 
@@ -502,6 +508,7 @@ const SecondaryCustomerCard: React.FC<SolarCardProps> = ({
                 navigation.navigate("ProductCatalogue", {
                   retailer_id: item?.id,
                   distributor_id: item?.distributor_name,
+                  customer: item,
                   type: item?.customer_type || item?.type || "Retailer",
                   customer_type_id: item?.customer_type_id || item?.customertype,
                   customer_type: item?.customer_type || item?.type,

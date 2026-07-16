@@ -464,16 +464,36 @@ const CustomerList = ({ route }: any) => {
                 }
               }}
               ListHeaderComponent={() => {
-                if (currentCheckin?.entity_details && currentCheckin?.entity_type == "secondary_customer") {
+                const currentDetails = currentCheckin?.entity_details;
+                const currentCustomerId =
+                  currentDetails?.customer_id ||
+                  currentDetails?.id ||
+                  currentCheckin?.entity_id;
+                const listedCustomer = customerData.find((customer: any) =>
+                  String(customer?.customer_id || customer?.id) === String(currentCustomerId),
+                );
+                const currentCustomer = currentDetails ? {
+                  ...listedCustomer,
+                  ...currentDetails,
+                  id: currentDetails?.id || currentDetails?.customer_id || currentCheckin?.entity_id,
+                  customer_id: currentDetails?.customer_id || currentDetails?.id || currentCheckin?.entity_id,
+                } : null;
+                const usesCustomerModel =
+                  isCustomerTypeList ||
+                  isSecondary ||
+                  currentCheckin?.entity_type === 'customer' ||
+                  currentCheckin?.entity_type === 'secondary_customer';
+
+                if (currentCustomer && usesCustomerModel) {
                   return (
-                    <SecondaryCustomerCard currentLat={currentLat} currentLng={currentLng} locationError={locationError} item={currentCheckin?.entity_details} navigation={navigation} index={-1} isPunchedIn={isPunchedIn} type={currentCheckin} />
+                    <SecondaryCustomerCard currentLat={currentLat} currentLng={currentLng} locationError={locationError} item={currentCustomer} navigation={navigation} index={-1} isPunchedIn={isPunchedIn} type={currentCheckin} />
                   )
                 } else if (
-                  currentCheckin?.entity_details &&
-                  (currentCheckin?.entity_type == "customer" || currentCheckin?.entity_type == "distributor")
+                  currentCustomer &&
+                  currentCheckin?.entity_type === 'distributor'
                 ) {
                   return (
-                    <CustomerCard currentLat={currentLat} currentLng={currentLng} locationError={locationError} item={currentCheckin?.entity_details} navigation={navigation} index={-1} isPunchedIn={isPunchedIn} type={currentCheckin} />
+                    <CustomerCard currentLat={currentLat} currentLng={currentLng} locationError={locationError} item={currentCustomer} navigation={navigation} index={-1} isPunchedIn={isPunchedIn} type={currentCheckin} />
                   )
                 }
               }}

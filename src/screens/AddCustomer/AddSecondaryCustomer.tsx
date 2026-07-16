@@ -35,6 +35,7 @@ import {
   useGetPincodeByCityListAPi,
   useGetPincodeListAPi,
   useGetStateListApi,
+  useGetCustomerTypesApi,
   useMutateCustomerTypeListApi,
 } from '../../api/query/CustomerApi';
 import { Asset, ImagePickerResponse, launchCamera, launchImageLibrary } from 'react-native-image-picker';
@@ -80,6 +81,13 @@ const logFormData = (label: string, formData: FormData) => {
     }
   });
   console.log(`===== ${label} FormData END =====`);
+};
+
+const normalizeBankAccountType = (value: any) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'savings') return 'Savings';
+  if (normalized === 'current') return 'Current';
+  return '';
 };
 
 const AccordionSection = ({ title, children, defaultExpanded = false }: any) => {
@@ -162,7 +170,9 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
     existingCustomer?.type ||
     '',
   ).toLowerCase();
-  const isRetailerCustomer = resolvedCustomerType.includes('retailer');
+  const [isRetailerCustomer, setIsRetailerCustomer] = useState(
+    resolvedCustomerType.includes('retailer'),
+  );
 
   const [formData, setFormData] = useState<any>({
     type,
@@ -176,8 +186,7 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
     district_id: '',
     city_id: '',
     pincode_id: '',
-    distributor_name: '', // comma separated
-    agri_distributor: '', // comma separated
+    parent_customer_ids: [] as string[],
     sales_exception_assignment: '',
     vehicle_segment: '',
     belt_area_market_name: '',
@@ -207,6 +216,7 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
   const [loading, setLoading] = useState(false);
   const [bankNumberError, setBankNumberError] = useState<string | null>(null);
   const { mutateAsync: getBeatList } = useGetBeatList();
+  const { mutateAsync: getCustomerTypes } = useGetCustomerTypesApi();
   const { mutateAsync: getCustomerTypeList } = useMutateCustomerTypeListApi();
   const { mutateAsync: getPincodes } = useGetPincodeListAPi();
   const { mutateAsync: getPincodesByCity } = useGetPincodeByCityListAPi();
@@ -219,7 +229,8 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
 
   const { coords } = useLocationHook();
   const [useCurrentLocation, setUseCurrentLocation] = useState(false);
-  const [distributors, setDistributors] = useState<any[]>([]);
+  const [parentCustomers, setParentCustomers] = useState<any[]>([]);
+  const [parentCustomersLoading, setParentCustomersLoading] = useState(false);
   const [cityOptions, setCityOptions] = useState<any[]>([]);
   const [showCityDropdown, setShowCityDropdown] = useState(false);
   const loadBeats = useCallback(async () => {
@@ -236,37 +247,107 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
     }
   }, [getBeatList]);
 
-  const loadDistributors = useCallback(async () => {
+  const getResponseList = (payload: any) => {
+    const list =
+      payload?.data?.data?.data ??
+      payload?.data?.data ??
+      payload?.data?.customer_types ??
+      payload?.data?.types ??
+      payload?.data ??
+      payload?.customer_types ??
+      payload?.types ??
+      payload;
+
+    return Array.isArray(list) ? list : [];
+  };
+
+  const getCustomerTypeLabel = (item: any) => String(
+    item?.customertype_name ??
+    item?.customer_type ??
+    item?.name ??
+    item?.title ??
+    item?.type ??
+    item?.label ??
+    '',
+  ).trim();
+
+  const getCustomerTypeId = (item: any) =>
+    item?.id ?? item?.customer_type_id ?? item?.customertype ?? item?.value;
+
+  const loadCustomerConfiguration = useCallback(async () => {
+    setParentCustomersLoading(true);
     try {
-      const res = await getCustomerTypeList({
-        customer_type_id: 1,
-        page: 1,
-        pageSize: 100,
+      const typeResponse = await getCustomerTypes();
+      const customerTypes = getResponseList(typeResponse?.data);
+      const retailerType = customerTypes.find(
+        (item: any) => {
+          const label = getCustomerTypeLabel(item).toLowerCase();
+          return label.includes('retailer') && !label.includes('secondary');
+        },
+      );
+      const retailerTypeId = getCustomerTypeId(retailerType);
+      const currentTypeIsRetailer =
+        resolvedCustomerType.includes('retailer') ||
+        (customerTypeId != null && retailerTypeId != null &&
+          String(customerTypeId) === String(retailerTypeId));
+
+      setIsRetailerCustomer(currentTypeIsRetailer);
+      if (!currentTypeIsRetailer) {
+        setParentCustomers([]);
+        return;
+      }
+
+      const parentTypes = customerTypes.filter((item: any) => {
+        const label = getCustomerTypeLabel(item).toLowerCase().trim();
+        const isDealerOrDistributor = label.includes('dealer') || label.includes('distributor');
+        const isOldCustomerModel = label.includes('master') || label.includes('secondary');
+        return isDealerOrDistributor && !isOldCustomerModel;
       });
 
-      if (res?.data?.status) {
-        const list = res?.data?.data?.data || [];
-        setDistributors(
-          list.map((d: any) => ({
+      const responses = await Promise.all(
+        parentTypes.map((parentType: any) => getCustomerTypeList({
+          customer_type_id: getCustomerTypeId(parentType),
+          page: 1,
+          pageSize: 100,
+        })),
+      );
+
+      const seen = new Set<string>();
+      const combinedParentCustomers = responses.flatMap((response: any, responseIndex: number) =>
+        getResponseList(response?.data).map((customer: any) => {
+          const value = String(customer?.customer_id ?? customer?.id ?? '');
+          if (!value || seen.has(value)) return null;
+          seen.add(value);
+          return {
             label: [
-              d.customer_code,
-              d.shop_name || d.name || d.legal_name || d.owner_name,
+              getCustomerTypeLabel(parentTypes[responseIndex]),
+              customer?.customer_code,
+              customer?.shop_name || customer?.name || customer?.legal_name || customer?.owner_name,
             ].filter(Boolean).join(' - '),
-            value: String(d.customer_id || d.id),
-          })),
-        );
+            value,
+          };
+        }).filter(Boolean),
+      );
+
+      setParentCustomers(combinedParentCustomers);
+      if (!parentTypes.length) {
+        Toast.show({
+          type: 'error',
+          text1: 'Dealer or Distributor customer type not found',
+        });
       }
     } catch (e) {
-      console.log('Distributors fetch error', e);
+      console.log('Parent customers fetch error', e);
+      setParentCustomers([]);
+    } finally {
+      setParentCustomersLoading(false);
     }
-  }, [getCustomerTypeList]);
+  }, [customerTypeId, getCustomerTypeList, getCustomerTypes, resolvedCustomerType]);
 
   useEffect(() => {
     loadBeats();
-    if (isRetailerCustomer) {
-      loadDistributors();
-    }
-  }, [isRetailerCustomer, loadBeats, loadDistributors]);
+    loadCustomerConfiguration();
+  }, [loadBeats, loadCustomerConfiguration]);
 
   const loadPincodesByCity = async (cityId: any) => {
     try {
@@ -453,6 +534,11 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
   };
 
   const pickImage = async (fromCamera = false) => {
+    // Dismiss the upload sheet before presenting the native camera/gallery.
+    // This prevents the sheet from remaining visible behind the iOS picker.
+    actionSheetRef.current?.hide();
+    await new Promise<void>(resolve => setTimeout(() => resolve(), 250));
+
     if (fromCamera) {
       const hasPermission = await requestPermissions();
       if (!hasPermission) {
@@ -523,7 +609,6 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
         }
       }
 
-      actionSheetRef.current?.hide();
     });
   };
 
@@ -598,7 +683,7 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
 
   const getAdditionalCount = () => {
     let count = 0;
-    if (isRetailerCustomer && formData.distributor_name) count++;
+    if (isRetailerCustomer && formData.parent_customer_ids?.length) count++;
     return count;
   };
 
@@ -643,7 +728,7 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
     const mobileNumbers = formData.mobile_numbers.map((num: string) => normalizeIndianMobileNumber(num)).filter(Boolean);
     const [firstName, ...lastNameParts] = formData.owner_name.trim().split(/\s+/);
     const parentIds = isRetailerCustomer
-      ? [formData.distributor_name, formData.agri_distributor].filter(Boolean).join(',')
+      ? formData.parent_customer_ids.filter(Boolean).join(',')
       : '';
 
     if (isEdit) appendIfPresent('customer_id', existingCustomer?.customer_id || existingCustomer?.id);
@@ -669,6 +754,7 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
     appendIfPresent('longitude', useCurrentLocation ? coords?.longitude : existingCustomer?.longitude);
     appendIfPresent('gstin_no', formData.gst_number);
     appendIfPresent('pan_no', formData.pan_number);
+    appendIfPresent('bank_account_type', normalizeBankAccountType(formData.bank_account_type));
     appendIfPresent('account_holder', formData.account_holder_name);
     appendIfPresent('account_number', formData.bank_account_number);
     appendIfPresent('bank_name', formData.bank_name);
@@ -737,19 +823,20 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
   };
 
   const addMobileNumber = () => {
-    if (!mobileInput.trim() || mobileInput.length !== 10) {
+    const normalizedMobile = normalizeIndianMobileNumber(mobileInput);
+    if (!normalizedMobile || normalizedMobile.length !== 10) {
       Toast.show({ type: 'error', text1: 'Enter valid 10-digit number' });
       return;
     }
-    if (formData.mobile_numbers.length >= 5) {
-      Toast.show({ type: 'error', text1: 'Maximum 5 numbers allowed' });
+    if (formData.mobile_numbers.length >= 2) {
+      Toast.show({ type: 'error', text1: 'Maximum 2 numbers allowed' });
       return;
     }
-    if (formData.mobile_numbers.includes(mobileInput)) {
+    if (formData.mobile_numbers.includes(normalizedMobile)) {
       Toast.show({ type: 'error', text1: 'Number already added' });
       return;
     }
-    handleChange('mobile_numbers', [...formData.mobile_numbers, mobileInput]);
+    handleChange('mobile_numbers', [...formData.mobile_numbers, normalizedMobile]);
     setMobileInput('');
   };
 
@@ -761,16 +848,25 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
     if (isEdit && existingCustomer) {
       const details = existingCustomer.customerdetails || {};
       const address = existingCustomer.customeraddress || {};
-      const mobileValue = existingCustomer.mobile_number || existingCustomer.mobile || existingCustomer.contact_number || '';
       const parentIds = Array.isArray(existingCustomer.parent_id)
         ? existingCustomer.parent_id
         : String(existingCustomer.parent_id || '').split(',').filter(Boolean);
-      const mobiles = mobileValue
-        ? String(mobileValue)
-          .split(',')
-          .map((n: string) => normalizeIndianMobileNumber(n))
-          .filter(Boolean)
-        : [];
+      const legacyParentIds = [
+        existingCustomer.distributor_name,
+        existingCustomer.agri_distributor,
+      ].flatMap(value => String(value || '').split(',')).filter(Boolean);
+      const mobiles = [
+        existingCustomer.mobile_number,
+        existingCustomer.mobile,
+        existingCustomer.contact_number,
+        details.mobile,
+        details.contact_number,
+      ]
+        .flatMap(value => String(value || '').split(','))
+        .map((number: string) => normalizeIndianMobileNumber(number))
+        .filter((number: string) => number.length === 10)
+        .filter((number: string, index: number, list: string[]) => list.indexOf(number) === index)
+        .slice(0, 2);
       setFormData({
         type: existingCustomer.type || existingCustomer.customer_type || type,
         sub_type: existingCustomer.sub_type || existingCustomer.firmtype || details.firmtype || '',
@@ -783,8 +879,10 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
         district_id: existingCustomer.district_id || address.district_id || '',
         city_id: existingCustomer.city_id || address.city_id || '',
         pincode_id: existingCustomer.pincode_id || address.pincode_id || '',
-        distributor_name: existingCustomer.distributor_name || parentIds[0] || '',
-        agri_distributor: existingCustomer.agri_distributor || parentIds[1] || '',
+        parent_customer_ids: [
+          ...parentIds,
+          ...legacyParentIds,
+        ].filter(Boolean).map(String).filter((value, index, list) => list.indexOf(value) === index),
         beat_id: existingCustomer.beat_id || '',
         belt_area_market_name: existingCustomer.belt_area_market_name || existingCustomer.locality || '',
         saathi_awareness_status: existingCustomer.saathi_awareness_status || existingCustomer.status_type || '',
@@ -798,7 +896,7 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
         bank_proof: existingCustomer.bank_proof ? { uri: resolveMediaUrl(existingCustomer.bank_proof) } : null,
         aadhar: existingCustomer.aadhar ? { uri: resolveMediaUrl(existingCustomer.aadhar) } : null,
         pan_number: existingCustomer.pan_number || existingCustomer.pan_no || details.pan_no || '',
-        bank_account_type: existingCustomer.bank_account_type || '',
+        bank_account_type: normalizeBankAccountType(existingCustomer.bank_account_type),
         bank_account_number: existingCustomer.bank_account_number || existingCustomer.account_number || details.account_number || '',
         bank_account_number_confirm: existingCustomer.bank_account_number || existingCustomer.account_number || details.account_number || '',
         bank_name: existingCustomer.bank_name || details.bank_name || '',
@@ -838,7 +936,7 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
     if (!formData.city_id) return "City is required";
 
     // Additional
-    if (isRetailerCustomer && !formData.distributor_name) return "Distributor 1 is required";
+    if (isRetailerCustomer && !formData.parent_customer_ids?.length) return "Parent Customer is required";
 
     // Attachments
     if (!formData.shop_photo) return "Shop Image is required";
@@ -893,7 +991,7 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
 
               <View style={{ marginTop: 8 }}>
                 <AppText size={14} family="InterMedium">
-                  Mobile Numbers (max 5) *
+                  Mobile Numbers (max 2) *
                 </AppText>
                 <AppText
                   size={12}
@@ -902,7 +1000,7 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
                   style={{ marginTop: 4, marginBottom: 8 }}
                 >
                   • First number will be considered **Primary Mobile {'\n'}   Number** (also used for WhatsApp){'\n'}
-                  • Other numbers are secondary / alternate contact numbers
+                  • Second number is the alternate contact number
                 </AppText>
                 <View style={[styles.selectUser, { flexDirection: 'row', marginTop: 8, alignItems: 'center' }]}>
                   <TextInput
@@ -1033,33 +1131,20 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
               />
 
               {isRetailerCustomer && (
-                <>
-                  <Dropdown
-                    style={[styles.selectUser, { padding: 14, marginTop: 12 }]}
-                    data={distributors}
-                    value={formData.distributor_name}
-                    onChange={(item) => handleChange('distributor_name', item.value)}
-                    labelField="label"
-                    valueField="value"
-                    placeholder="Select Distributor 1 *"
-                    placeholderStyle={{ color: 'gray', fontFamily: fonts.InterRegular, fontSize: 14 }}
-                    search
-                    renderRightIcon={() => <ArrowDownIcon />}
-                  />
-
-                  <Dropdown
-                    style={[styles.selectUser, { padding: 14, marginTop: 12 }]}
-                    data={distributors}
-                    value={formData.agri_distributor}
-                    onChange={(item) => handleChange('agri_distributor', item.value)}
-                    labelField="label"
-                    valueField="value"
-                    placeholder="Select Distributor 2 (optional)"
-                    placeholderStyle={{ color: 'gray', fontFamily: fonts.InterRegular, fontSize: 14 }}
-                    search
-                    renderRightIcon={() => <ArrowDownIcon />}
-                  />
-                </>
+                <MultiSelect
+                  style={[styles.selectUser, { padding: 14, marginTop: 12 }]}
+                  data={parentCustomers}
+                  value={formData.parent_customer_ids}
+                  onChange={(values) => handleChange('parent_customer_ids', values.map(String))}
+                  labelField="label"
+                  valueField="value"
+                  placeholder={parentCustomersLoading ? 'Loading Parent Customers...' : 'Select Parent Customer *'}
+                  placeholderStyle={{ color: 'gray', fontFamily: fonts.InterRegular, fontSize: 14 }}
+                  search
+                  searchPlaceholder="Search Dealer or Distributor"
+                  disable={parentCustomersLoading}
+                  renderRightIcon={() => parentCustomersLoading ? <ActivityIndicator size="small" /> : <ArrowDownIcon />}
+                />
               )}
 
               <Dropdown
@@ -1158,8 +1243,8 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
               <Dropdown
                 style={[styles.selectUser, { padding: 14, marginTop: 12 }]}
                 data={[
-                  { label: 'Savings', value: 'SAVINGS' },
-                  { label: 'Current', value: 'CURRENT' },
+                  { label: 'Savings', value: 'Savings' },
+                  { label: 'Current', value: 'Current' },
                 ]}
                 value={formData.bank_account_type}
                 onChange={(item) => handleChange('bank_account_type', item.value)}

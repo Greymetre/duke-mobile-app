@@ -48,6 +48,12 @@ export const useMutateCustomerTypeListApi = () => {
     });
 };
 
+export const useGetCustomerTypesApi = () => {
+    return useMutation({
+        mutationFn: () => axiosClient.get(API_ENDPOINT.GET_CUSTOMER_TYPE_LIST),
+    });
+};
+
 // export const useMutateSecondaryCustListApi = () => {
 //   return useMutation({
 //     mutationFn: ({ type, search, page }: { type: string; search?: string; page?: number }) => {

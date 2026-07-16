@@ -532,6 +532,7 @@ const CustomerCard: React.FC<SolarCardProps> = ({
                 customer_id: item?.id,
                 retailer_id: isDistributor ? undefined : item?.id,
                 distributor_id: isDistributor ? item?.id : item?.distributor_name,
+                customer: item,
                 type: customerTypeName || (isDistributor ? "Distributor" : "Retailer"),
                 customer_type_id: customerTypeId,
                 customer_type: customerTypeName,
