@@ -233,6 +233,25 @@ export const styles = StyleSheet.create({
         paddingHorizontal: 14
     },
 
+    searchBox: {
+        height: 48,
+        marginTop: 15,
+        borderRadius: 8,
+        paddingHorizontal: 14,
+        backgroundColor: colors.blue,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    searchInput: {
+        flex: 1,
+        height: 48,
+        color: colors.white,
+        fontFamily: fonts.InterRegular,
+        fontSize: 14,
+        paddingVertical: 0,
+    },
+
     
 
 })

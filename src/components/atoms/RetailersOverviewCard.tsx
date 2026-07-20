@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, StyleSheet, Image, Pressable } from 'react-native';
 import AppText from '../AppText/AppText';
 import { rw } from '../../utils/responsive';
@@ -7,22 +7,60 @@ import { orderData } from '../../utils/CommanFunction';
 import { formatShortNumber } from '../../utils/misc';
 
 const RetailersOverviewCard = ({data}: any) => {
+    const [period, setPeriod] = useState<'MTD' | 'YTD'>('MTD');
+    const isMTD = period === 'MTD';
+    const hasCombinedDashboardResponse = data?.total_users != null || data?.total_target != null;
+    const mtdQuantity = data?.total_order_quantity_current_month != null
+        ? Number(data.total_order_quantity_current_month) || 0
+        : hasCombinedDashboardResponse
+        ? (Number(data?.current_month_orders?.quantity) || 0)
+        : (Number(data?.current_month_orders?.quantity) || 0) + (Number(data?.current_month_orders_dsr?.quantity) || 0);
+    const mtdValue = data?.total_order_value_current_month != null
+        ? Number(data.total_order_value_current_month) || 0
+        : hasCombinedDashboardResponse
+        ? (Number(data?.current_month_orders?.value) || 0)
+        : (Number(data?.current_month_orders?.value) || 0) + (Number(data?.current_month_orders_dsr?.value) || 0);
+    const mtdOrders = data?.total_orders_current_month ??
+        ((Number(data?.current_month_orders?.orders ?? data?.current_month_orders?.count) || 0) +
+        (Number(data?.current_month_orders_dsr?.orders ?? data?.current_month_orders_dsr?.count) || 0));
+    const uniqueCustomers = isMTD
+        ? (data?.secondary_customers_with_order_current_month ?? data?.unique_buyers ?? ((Number(data?.unique_buyers_from_asr) || 0) + (Number(data?.unique_buyers_from_dsr) || 0)))
+        : (data?.secondary_customers_with_order_current_year || 0);
+    const orderValues = isMTD
+        ? [mtdOrders, mtdQuantity, mtdValue]
+        : [data?.total_orders_current_year || 0, data?.total_order_quantity_current_year || 0, data?.total_order_value_current_year || 0];
+    const registeredCustomers = isMTD
+        ? (data?.customers_registered_mtd ?? data?.total_customers ?? data?.secondary_customers_registered_approved_current_year ?? 0)
+        : (data?.customers_registered_ytd ?? data?.total_customers ?? data?.secondary_customers_registered_approved_current_year ?? 0);
+    const registeredToday = data?.customers_registered_today ?? data?.secondary_customers_registered_approved_today ?? 0;
+
     return (
         <View style={styles.container}>
             <View style={styles.card}>
+                <View style={styles.periodTabs}>
+                    {(['MTD', 'YTD'] as const).map(item => (
+                        <Pressable
+                            key={item}
+                            onPress={() => setPeriod(item)}
+                            style={[styles.periodTab, period === item && styles.activePeriodTab]}
+                            hitSlop={8}>
+                            <AppText size={14} family="InterSemiBold" color={period === item ? 'white' : '#8a8fa3'}>{item}</AppText>
+                        </Pressable>
+                    ))}
+                </View>
                 {/* Header Text */}
-                <AppText size={11} color="#9ca3af" family='InterRegular'>
-                    Registered & Approved · as On Date
+                <AppText size={14} color="#8a8fa3" family='InterRegular'>
+                    Total Customers
                 </AppText>
 
                 {/* Main Number */}
                 <View style={styles.mainRow}>
                     <AppText size={30} family='InterMedium' color="#3a4da0">
-                        {data?.secondary_customers_registered_approved_current_year}
+                        {registeredCustomers}
                     </AppText>
                     <View style={styles.todayBadge}>
                         <AppText size={11} color="#125748" family="InterMedium">
-                            +{data?.secondary_customers_registered_approved_today} today
+                            +{registeredToday} today
                         </AppText>
                     </View>
                     <View style={[styles.iconContainer]}>
@@ -45,15 +83,15 @@ const RetailersOverviewCard = ({data}: any) => {
                     </View>
                     <View style={{ flex: 1 }}>
                         <AppText size={12} family='InterMedium' color="#3a4da0">
-                            Unique Retailers Ordered
+                            Unique Customers Ordered
                         </AppText>
                         <AppText size={11} color="#6b7280" family="InterMedium">
-                            YTD · placed at least 1 order
+                            {period} · placed at least 1 order
                         </AppText>
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
                         <AppText size={22} family='InterSemiBold' color="#3a4da0">
-                            {data?.secondary_customers_with_order_current_year}
+                            {uniqueCustomers}
                         </AppText>
                         <AppText size={11} color="#267a66" family='InterMedium'>
                             {/* 76% of total */}
@@ -65,23 +103,16 @@ const RetailersOverviewCard = ({data}: any) => {
                 <View style={styles.ytdSection}>
                     <View style={styles.ytdHeader}>
                         <AppText size={11} color="#6b7280" family="InterMedium">
-                            YEAR TO DATE ORDERS
+                            {isMTD ? 'MONTH TO DATE ORDERS' : 'YEAR TO DATE ORDERS'}
                         </AppText>
                         <View style={styles.ytdBadge}>
-                            <AppText size={12} color="#3a4da0" family="InterMedium">YTD</AppText>
+                            <AppText size={12} color="#3a4da0" family="InterMedium">{period}</AppText>
                         </View>
                     </View>
 
                     <View style={styles.orderGrid}>
                         {orderData.map((item: any, index: number) => {
-                            let count : any = 0;
-                            if(index === 0) {
-                                count = data?.total_orders_current_year || 0;
-                            } else if(index === 1) {
-                                count = formatShortNumber(data?.total_order_quantity_current_year) || 0;
-                            } else if(index === 2) {
-                                count = formatShortNumber(data?.total_order_value_current_year) || 0;
-                            }
+                            const count = index === 0 ? orderValues[index] : formatShortNumber(orderValues[index]) || 0;
                             return (
                                 <Pressable
                                     key={item.id}
@@ -134,6 +165,22 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.06,
         shadowRadius: 10,
         elevation: 4,
+    },
+    periodTabs: {
+        flexDirection: 'row',
+        backgroundColor: '#f0f1f8',
+        borderRadius: 30,
+        padding: 5,
+        marginBottom: rw(18),
+    },
+    periodTab: {
+        flex: 1,
+        paddingVertical: rw(8),
+        borderRadius: 26,
+        alignItems: 'center',
+    },
+    activePeriodTab: {
+        backgroundColor: '#3f4d99',
     },
     mainRow: {
         flexDirection: 'row',

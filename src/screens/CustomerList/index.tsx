@@ -9,7 +9,7 @@ import { colors } from '../../utils/Colors';
 import { SearchSvgIcon } from '../../assets/svgs/HomePageSvgs';
 import { DATA } from '../../components/Comman/CommanFunction';
 import CustomerCard from '../../components/atoms/CustomerCard';
-import { useMutateBeatCustomerList, useMutateCustomerListApi, useMutateCustomerTypeListApi, useMutateSecondaryCustListApi } from '../../api/query/CustomerApi';
+import { useGetUserCityListApi, useMutateBeatCustomerList, useMutateCustomerListApi, useMutateCustomerTypeListApi, useMutateSecondaryCustListApi } from '../../api/query/CustomerApi';
 import SecondaryCustomerCard from '../../components/atoms/SecondaryCustomerCard';
 import Geolocation from '@react-native-community/geolocation';
 import Toast from 'react-native-toast-message';
@@ -28,6 +28,7 @@ const CustomerList = ({ route }: any) => {
   const { mutateAsync: mutateCustomerTypeList } = useMutateCustomerTypeListApi();
   const { mutateAsync: mutateSecondaryCustList } = useMutateSecondaryCustListApi();
   const { mutateAsync: mutateBeatCustomerList } = useMutateBeatCustomerList();
+  const { mutateAsync: getUserCities } = useGetUserCityListApi();
   // const [currentLat, setCurrentLat] = useState<number | null>(null)
   // const [currentLng, setCurrentLng] = useState<number | null>(null)
   const [locationError, setLocationError] = useState<string | null>(null)
@@ -43,7 +44,10 @@ const CustomerList = ({ route }: any) => {
   const [hasMore, setHasMore] = useState(true);
 
   const [showCityModal, setShowCityModal] = useState(false);
-  const [cityList, setCityList] = useState([]);
+  const [cityList, setCityList] = useState<any[]>([]);
+  const [cityPage, setCityPage] = useState(1);
+  const [cityHasMore, setCityHasMore] = useState(true);
+  const [cityLoading, setCityLoading] = useState(false);
   const [currentCheckin, setCurrentCheckin] = useState<any>();
   const [citySearchText, setCitySearchText] = useState('');
   const [selectedCity, setSelectedCity] = useState<any>(null);
@@ -104,7 +108,10 @@ const CustomerList = ({ route }: any) => {
         'https://duke.fieldkonnect.in/api/getMyHierarchyUsers', // ← your endpoint 
         {
           headers: { Authorization: `Bearer ${token}` },
-          params: { type: route.params.type }, // optional, if backend needs it
+          params: {
+            type: route?.params?.type,
+            customer_type_id: customerTypeId,
+          },
         }
       );
 
@@ -187,22 +194,34 @@ const CustomerList = ({ route }: any) => {
     }
   };
 
-  const fetchCities = async () => {
+  const fetchCities = async (pageNumber = 1, isLoadMore = false) => {
+    if (cityLoading || (isLoadMore && !cityHasMore)) return;
+
     try {
-      const token = store.getState()?.auth?.token;
+      setCityLoading(true);
+      const res = await getUserCities({ page: pageNumber, per_page: 20 });
+      const payload = res?.data?.data;
+      const rawCities = Array.isArray(payload) ? payload : payload?.data || [];
+      const cities = rawCities.map((item: any) => ({
+        ...item,
+        id: item?.id ?? item?.city_id,
+        city_name: item?.city_name ?? item?.name ?? item?.city ?? '',
+      })).filter((item: any) => item.id && item.city_name);
 
-      const res = await axios.get(
-        'https://duke.fieldkonnect.in/api/secondary-customer/cities',
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-
-      if (res?.data?.status) {
-        setCityList(res.data.data || []);
-      }
+      setCityList((previous: any[]) => {
+        const combined = isLoadMore ? [...previous, ...cities] : cities;
+        return combined.filter((city: any, index: number, all: any[]) =>
+          all.findIndex((item: any) => String(item.id) === String(city.id)) === index
+        );
+      });
+      setCityPage(pageNumber);
+      setCityHasMore(payload?.last_page
+        ? pageNumber < payload.last_page
+        : cities.length === 20);
     } catch (e) {
       Toast.show({ type: 'error', text1: 'Failed to load cities' });
+    } finally {
+      setCityLoading(false);
     }
   };
   const handleCUrtrentCheckin = async () => {
@@ -266,6 +285,8 @@ const CustomerList = ({ route }: any) => {
           search: searchText,
           page: pageNumber,
           pageSize: 5,
+          city_name: clearCity ? undefined : overrideCity?.city_name ?? selectedCity?.city_name,
+          for_user_id: clearUser ? undefined : overrideUser?.id ?? selectedUser?.id,
         });
       } else if (isSecondary) {
         res = await mutateSecondaryCustList({
@@ -381,19 +402,21 @@ const CustomerList = ({ route }: any) => {
           )}
         </View>
         {
-          route?.params?.type && (
+          (route?.params?.type || isCustomerTypeList) && (
             <View style={[styles.row, { gap: 13, marginVertical: 15 }]}>
-              <Pressable
-                style={[styles.UserBox, styles.row]}
-                onPress={() => setShowStatusModal(true)}
-              >
-                <View style={{ flex: 1 }}>
-                  <AppText size={12} color="black">
-                    {selectedStatus}
-                  </AppText>
-                </View>
-                <ArrowDownIcon />
-              </Pressable>
+              {route?.params?.type && (
+                <Pressable
+                  style={[styles.UserBox, styles.row]}
+                  onPress={() => setShowStatusModal(true)}
+                >
+                  <View style={{ flex: 1 }}>
+                    <AppText size={12} color="black">
+                      {selectedStatus}
+                    </AppText>
+                  </View>
+                  <ArrowDownIcon />
+                </Pressable>
+              )}
               {
                 !route?.params?.beatId && (
                   <Pressable
@@ -421,7 +444,9 @@ const CustomerList = ({ route }: any) => {
                 style={[styles.UserBox, styles.row]}
                 onPress={() => {
                   setShowCityModal(true);
-                  fetchCities();
+                  setCityPage(1);
+                  setCityHasMore(true);
+                  fetchCities(1);
                 }}
               >
                 <View style={{ flex: 1 }}>
@@ -622,6 +647,11 @@ const CustomerList = ({ route }: any) => {
             <FlatList
               data={filteredCities}
               keyExtractor={item => String(item.id)}
+              onEndReached={() => fetchCities(cityPage + 1, true)}
+              onEndReachedThreshold={0.5}
+              ListFooterComponent={cityLoading ? (
+                <ActivityIndicator size="small" color={colors.blue} />
+              ) : null}
               renderItem={({ item }: { item: any }) => (
                 <Pressable
                   onPress={() => {

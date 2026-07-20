@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { ArrowDownIcon, CalenderIcon, PlusAddIcon } from '../../assets/svgs/SvgsFile';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, FlatList, Keyboard, Pressable, TextInput, View } from 'react-native';
+import { ArrowDownIcon, CalenderIcon, CrossIcon } from '../../assets/svgs/SvgsFile';
+import { SearchSvgIcon } from '../../assets/svgs/HomePageSvgs';
 import { colors } from '../../utils/Colors';
 import { styles } from './styles';
 import AppText from '../../components/AppText/AppText';
@@ -20,8 +21,6 @@ type OrderListProps = {
     navigation: any
 }
 const OrderList = ({ navigation }: OrderListProps) => {
-    const [users, setUsers] = useState<DropdownUser[]>([]);
-    const [loadingUsers, setLoadingUsers] = useState<boolean>(true);
     const [usersSelect, setUsersSelect] = useState<DropdownUser[]>([]);
     const [selectedUserId, setSelectedUserId] = useState<number | string | null>(null);
     const [orderList, setOrderList] = useState<any[]>([]);
@@ -32,6 +31,8 @@ const OrderList = ({ navigation }: OrderListProps) => {
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
+    const [searchText, setSearchText] = useState('');
+    const isInitialSearchRender = useRef(true);
 
     const PAGE_SIZE = 10;
 
@@ -91,6 +92,21 @@ const OrderList = ({ navigation }: OrderListProps) => {
         );
     }, []);
 
+    useEffect(() => {
+        if (isInitialSearchRender.current) {
+            isInitialSearchRender.current = false;
+            return;
+        }
+
+        const timer = setTimeout(() => {
+            setPage(1);
+            setHasMore(true);
+            fetchOrderList(selectedUserId, startDate, endDate, 1, false);
+        }, 400);
+
+        return () => clearTimeout(timer);
+    }, [searchText]);
+
     const formatYYYYMMDD = (date: any): string => {
         if (!date) return '';
 
@@ -133,7 +149,11 @@ const OrderList = ({ navigation }: OrderListProps) => {
 
             // pagination
             params.append("page", String(pageNumber));
-            params.append("pageSqueryize", String(PAGE_SIZE));
+            params.append("pageSize", String(PAGE_SIZE));
+
+            if (searchText.trim()) {
+                params.append("global_search", searchText.trim());
+            }
 
             if (userId) {
                 params.append("user_id", String(userId));
@@ -298,6 +318,23 @@ const OrderList = ({ navigation }: OrderListProps) => {
     return (
         <View style={styles.container}>
             <View style={[styles.container, { paddingHorizontal: rw(18) }]} >
+                <View style={styles.searchBox}>
+                    <SearchSvgIcon />
+                    <TextInput
+                        placeholder="Search orders..."
+                        placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                        style={styles.searchInput}
+                        value={searchText}
+                        onChangeText={setSearchText}
+                        returnKeyType="search"
+                        onSubmitEditing={() => Keyboard.dismiss()}
+                    />
+                    {!!searchText && (
+                        <Pressable onPress={() => setSearchText('')} hitSlop={10}>
+                            <CrossIcon />
+                        </Pressable>
+                    )}
+                </View>
                 <View style={{ marginTop: 20 }}>
                     <Dropdown
                         style={styles.selectUser}

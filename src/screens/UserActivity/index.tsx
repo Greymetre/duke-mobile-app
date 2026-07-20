@@ -613,7 +613,7 @@ const UserActivityScreen = ({ navigation }: any) => {
                   item={item}
                   orderValue={stats?.total_order_value?.toLocaleString()}
                   quantity={stats?.total_quantity}
-                  totalCustomer={stats?.total_secondary_customers || 0 + stats?.total_master_distributors || 0}
+                  totalCustomer={stats?.total_created_customers || 0}
                   totalCheckIn={stats?.total_checkins}
                 />
               )}

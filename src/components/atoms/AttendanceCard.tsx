@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, TouchableOpacity, Image, StyleSheet, Platform, Pressable } from 'react-native';
+import { View, Image, StyleSheet, Platform, Pressable } from 'react-native';
 import AppText from '../AppText/AppText';
 import { rw } from '../../utils/responsive';
 
@@ -22,13 +22,13 @@ interface AttendanceCardProps {
 const AttendanceCard: React.FC<AttendanceCardProps> = ({ item, onPress, data, index }) => {
   let count = 0;
   if(index === 0){
-    count = data?.asr?.total + data?.dsr?.total || 0;
+    count = data?.total_users ?? ((data?.asr?.total || 0) + (data?.dsr?.total || 0));
   } else if(index === 1){
-    count = (data?.asr?.checked_in_today + data?.dsr?.checked_in_today) - (data?.leave_asr_today + data?.leave_dsr_today) || 0;
+    count = data?.total_punch_in ?? Math.max(0, (data?.asr?.checked_in_today || 0) + (data?.dsr?.checked_in_today || 0) - (data?.leave_asr_today || 0) - (data?.leave_dsr_today || 0));
   } else if(index === 2){
-    count = (data?.leave_asr_today + data?.leave_dsr_today) || 0;
+    count = data?.total_leave_today ?? ((data?.leave_asr_today || 0) + (data?.leave_dsr_today || 0));
   } else if(index === 3){
-    count = (data?.asr?.not_checked_in_today + data?.dsr?.not_checked_in_today) || 0;
+    count = data?.total_not_punch_in ?? ((data?.asr?.not_checked_in_today || 0) + (data?.dsr?.not_checked_in_today || 0));
   }
   return (
     <Pressable
@@ -67,7 +67,7 @@ export const stylesss = StyleSheet.create({
     marginTop: 16,
     borderRadius: 14,
     shadowOffset: { width: 4, height: 5 },
-    shadowColor: Platform.OS == "ios" ? 'rgba(0,0,0,0.03)' : 'rgba(0,0,0,0.1)',
+    shadowColor: Platform.OS === "ios" ? 'rgba(0,0,0,0.03)' : 'rgba(0,0,0,0.1)',
     shadowOpacity: 1,
     shadowRadius: 5,
     elevation: 8,

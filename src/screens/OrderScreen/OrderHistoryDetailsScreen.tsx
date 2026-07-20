@@ -14,7 +14,22 @@ import { NativeModules } from 'react-native';
 import ReactNativeBlobUtil from 'react-native-blob-util';
 const { HtmlToPdf } = NativeModules;
 import { Platform } from 'react-native';
-import { normalizeIndianMobileNumber } from '../../utils/phone';
+import { formatMobileNumberList } from '../../utils/phone';
+
+const resolveMobileNumber = (...values: unknown[]) => {
+    for (const value of values) {
+        if (value === null || value === undefined || String(value).trim() === '') {
+            continue;
+        }
+
+        const formattedNumber = formatMobileNumberList(value as string | number)[0];
+        if (formattedNumber) {
+            return formattedNumber;
+        }
+    }
+
+    return '-';
+};
 
 interface OrderItem {
     id: string;               // unique key
@@ -146,6 +161,29 @@ const OrderHistoryDetailsScreen = () => {
         return sum + Number(item.line_total || 0);
     }, 0);
 
+    const customerMobileNumber = resolveMobileNumber(
+        orderDetails?.buyers?.mobile_number,
+        orderDetails?.buyers?.mobile,
+        orderDetails?.buyers?.contact_number,
+        orderDetails?.buyers?.phone,
+        orderDetails?.buyer?.mobile_number,
+        orderDetails?.buyer?.mobile,
+        orderDetails?.buyer?.contact_number,
+        orderDetails?.buyer_mobile_number,
+        orderDetails?.buyer_mobile,
+        orderDetails?.customer_mobile_number,
+        orderDetails?.customer_mobile,
+    );
+
+    const distributorMobileNumber = resolveMobileNumber(
+        orderDetails?.seller?.mobile_number,
+        orderDetails?.seller?.mobile,
+        orderDetails?.seller?.contact_number,
+        orderDetails?.seller?.phone,
+        orderDetails?.seller_mobile_number,
+        orderDetails?.seller_mobile,
+    );
+
     const generatePDF = async () => {
         try {
 
@@ -236,9 +274,9 @@ const OrderHistoryDetailsScreen = () => {
 
             <tr>
                 <td>Mobile Number</td>
-                <td>${orderDetails?.buyers?.mobile_number ? normalizeIndianMobileNumber(orderDetails.buyers.mobile_number) : '-'}</td>
+                <td>${customerMobileNumber}</td>
                 <td>Mobile Number</td>
-                <td>${orderDetails?.seller?.mobile ? normalizeIndianMobileNumber(orderDetails.seller.mobile) : '-'}</td>
+                <td>${distributorMobileNumber}</td>
             </tr>
 
             <tr>
@@ -380,11 +418,19 @@ const OrderHistoryDetailsScreen = () => {
                             </AppText>
 
                             <AppText size={14} color={'black'} family={'InterBold'}>
+                                Customer Mobile : {customerMobileNumber}
+                            </AppText>
+
+                            <AppText size={14} color={'black'} family={'InterBold'}>
                                 Distributor Name : {orderDetails?.seller_name}
                             </AppText>
 
                             <AppText size={14} color={'black'} family={'InterBold'}>
                                 Distributor Address : {orderDetails?.seller_address}
+                            </AppText>
+
+                            <AppText size={14} color={'black'} family={'InterBold'}>
+                                Distributor Mobile : {distributorMobileNumber}
                             </AppText>
 
                             <AppText size={14} color={'#333333'} family={'InterRegular'}>

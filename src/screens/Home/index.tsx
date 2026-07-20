@@ -27,12 +27,12 @@ import CustomerCalendar from '../../components/CustomCalendar/CalendarPopupView'
 import { fonts } from '../../utils/typography'
 import { SCREEN_HEIGHT } from '../../utils/misc'
 import AttendanceCard from '../../components/atoms/AttendanceCard'
-import { attendanceData, breakdownData } from '../../utils/CommanFunction'
-import BreakdownCard from '../../components/atoms/BreakdownCard'
+import { attendanceData } from '../../utils/CommanFunction'
 import TargetAchievementCard from '../../components/atoms/TargetAchievementCard'
 import FieldActivitiesCard from '../../components/atoms/FieldActivitiesCard'
 import RetailersOverviewCard from '../../components/atoms/RetailersOverviewCard'
 import TopProductsCard from '../../components/atoms/TopProductsCard'
+import { DashboardAlerts, DashboardHighlights, ZonePerformanceCard } from '../../components/atoms/DashboardInsights'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { startLiveLocationTracking, stopLiveLocationTracking } from '../../services/liveLocationService'
 import { ANDROID_APP_VERSION, compareVersions } from '../../utils/appVersion'
@@ -846,23 +846,6 @@ const Home = () => {
                 ))}
               </View>
 
-              <View style={{ marginHorizontal: 16, gap: 8, marginTop: 20, flexDirection: 'row' }}>
-                {breakdownData.map((item: any, index: number) => (
-                  <BreakdownCard
-                    key={item.id}
-                    title={item.type}
-                    total={item.total}
-                    index={index}
-                    data={homeData}
-                    items={item.items}
-                    badgeColor={item.badgeColor}
-                    onPress={() => {
-                      console.log(`Pressed ${item.type} card`);
-                      // TODO: Add navigation or modal if needed
-                    }}
-                  />
-                ))}
-              </View>
               <View style={styles.mainContainer}>
                 <View style={[styles.row, { justifyContent: 'space-between' }]}>
                   <View style={[styles.row, { gap: 10 }]}>
@@ -881,6 +864,21 @@ const Home = () => {
                 onViewAllPress={() => console.log('View All pressed')}
               />
               <View style={styles.mainContainer}>
+                <View style={[styles.row, { gap: 10 }]}>
+                  <AppText color={colors.black} size={18} family="InterSemiBold">Zone Performance</AppText>
+                  <View style={styles.todayContainer}><AppText color={colors.blue} family="InterMedium" size={11}>MTD</AppText></View>
+                </View>
+              </View>
+              <ZonePerformanceCard data={homeData} />
+              <View style={styles.mainContainer}>
+                <AppText color={colors.black} size={18} family="InterSemiBold">Customer Order</AppText>
+              </View>
+              <RetailersOverviewCard data={homeData} />
+              <View style={styles.mainContainer}>
+                <AppText color={colors.black} size={18} family="InterSemiBold">Top Performing SKUs</AppText>
+              </View>
+              {homeData && <TopProductsCard data={homeData} />}
+              <View style={styles.mainContainer}>
                 <View style={[styles.row, { justifyContent: 'space-between' }]}>
                   <View style={[styles.row, { gap: 10 }]}>
                     <AppText color={colors.black} size={18} family="InterSemiBold">Promotional Activities</AppText>
@@ -892,34 +890,13 @@ const Home = () => {
               </View>
               <FieldActivitiesCard data={homeData} />
               <View style={styles.mainContainer}>
-                <View style={[styles.row, { justifyContent: 'space-between' }]}>
-                  <View style={[styles.row, { gap: 10 }]}>
-                    <AppText color={colors.black} size={18} family="InterSemiBold">Retailers</AppText>
-                    <View style={styles.todayContainer}>
-                      <AppText color={colors.blue} family={'InterMedium'} size={11}>YTD</AppText>
-                    </View>
-                  </View>
-                  <Pressable onPress={() => navigation.navigate("RetailersPerformanceViewAllScreen")} hitSlop={10}>
-                    <AppText color={colors.blue} family={'InterMedium'} size={13}>View All →</AppText>
-                  </Pressable>
-                </View>
+                <AppText color={colors.black} size={18} family="InterSemiBold">Highlights</AppText>
               </View>
-              <RetailersOverviewCard data={homeData} />
+              <DashboardHighlights data={homeData} />
               <View style={styles.mainContainer}>
-                <View style={[styles.row, { justifyContent: 'space-between' }]}>
-                  <View style={[styles.row, { gap: 10 }]}>
-                    <AppText color={colors.black} size={18} family="InterSemiBold">Top Performing SKUs</AppText>
-                  </View>
-                  {/* <Pressable>
-                    <AppText color={colors.blue} family={'InterMedium'} size={13}>View All →</AppText>
-                  </Pressable> */}
-                </View>
+                <AppText color={colors.black} size={18} family="InterSemiBold">Alerts</AppText>
               </View>
-              {
-                homeData && (
-                  <TopProductsCard data={homeData} />
-                )
-              }
+              <DashboardAlerts data={homeData} />
 
               <View style={{ height: 40 }} />
             </SafeAreaView>
