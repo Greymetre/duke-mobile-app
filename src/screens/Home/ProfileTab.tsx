@@ -16,6 +16,7 @@ import { BackIcon, UserIcon } from '../../assets/svgs/SvgsFile'
 import axios from 'axios'
 import { SCREEN_HEIGHT, SCREEN_WIDTH } from '../../utils/misc'
 import { stopLiveLocationTracking } from '../../services/liveLocationService'
+import { logoutApi } from '../../api/query/AuthAPI'
 
 const data = [
   { id: 1, icon: require('../../assets/images/HomeTabs/myprofile.png'), name: 'My Profile' },
@@ -34,6 +35,26 @@ const ProfileTab = ({ handleDrawerClose }: any) => {
   const { user } = useAppSelector(
     (state) => state.auth
   );
+
+  const handleLogout = async () => {
+    setLoading(true);
+
+    try {
+      await logoutApi();
+    } catch (error) {
+      console.warn('Logout API failed:', error);
+    } finally {
+      await stopLiveLocationTracking({ captureFinalLocation: false });
+      dispatch(logout());
+      dispatch(setUser(null));
+      dispatch(setToken(null));
+      navigation?.reset({
+        index: 0,
+        routes: [{ name: 'LoginScreen' }],
+      });
+      setLoading(false);
+    }
+  };
 
   const handleDeleteAccount = async () => {
     Alert.alert(
@@ -163,14 +184,7 @@ const ProfileTab = ({ handleDrawerClose }: any) => {
                       handleDrawerClose()
                     }
                     else if (item?.name == "Logout") {
-                      await stopLiveLocationTracking({ captureFinalLocation: false });
-                      navigation?.reset({
-                        index: 0,
-                        routes: [{ name: 'LoginScreen' }],
-                      });
-                      dispatch(logout());
-                      dispatch(setUser(null))
-                      dispatch(setToken(null))
+                      await handleLogout();
                     }
                     else if (item?.name == "Delete Account") {
                       handleDeleteAccount();

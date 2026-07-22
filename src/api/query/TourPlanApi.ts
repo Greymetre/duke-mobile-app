@@ -17,22 +17,30 @@ export const getTourObjectivesApi = () =>
 
 export const normalizeTourObjectives = (payload: any) => {
   const list =
+    payload?.data?.data?.objective_options ??
+    payload?.data?.objective_options ??
+    payload?.objective_options ??
     payload?.data?.data ??
     payload?.data?.objectives ??
     payload?.objectives ??
     payload?.data ??
     [];
 
-  return (Array.isArray(list) ? list : []).map((item: any) => {
-    const label = typeof item === 'string'
+  const seenLabels = new Set<string>();
+
+  return (Array.isArray(list) ? list : []).reduce((options: any[], item: any) => {
+    const rawLabel = typeof item === 'string'
       ? item
       : item?.label || item?.name || item?.objective || item?.title || item?.objective_name;
+    const label = typeof rawLabel === 'string' ? rawLabel.trim() : '';
+    const normalizedLabel = label.toLowerCase();
 
-    return {
-      label,
-      value: label,
-    };
-  }).filter((item: any) => item.label && item.value);
+    if (!label || seenLabels.has(normalizedLabel)) return options;
+
+    seenLabels.add(normalizedLabel);
+    options.push({ label, value: label });
+    return options;
+  }, []);
 };
 
 

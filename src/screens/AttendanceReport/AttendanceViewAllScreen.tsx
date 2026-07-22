@@ -42,65 +42,20 @@ type SectionType = {
   };
 };
 
-const DATA: SectionType[] = [
-  {
-    zone: 'North zone',
-    data: [
-      { branch: 'Lucknow', employee: 'Gajendra Singh', market: true },
-      { branch: 'Noida', employee: 'Harsh', leave: true },
-      { branch: 'Noida', employee: 'Anil', market: true },
-      { branch: 'Noida', employee: 'Asit', mispunch: true },
-    ],
-    total: { employees: 4, market: 2, leave: 1, mispunch: 1 },
-  },
-  {
-    zone: 'East zone',
-    data: [
-      { branch: 'Patna', employee: 'Amit', market: true },
-      { branch: 'Kolkata', employee: 'Ravi', leave: true },
-      { branch: 'Patna', employee: 'Suresh', market: true },
-    ],
-    total: { employees: 3, market: 2, leave: 1, mispunch: 0 },
-  },
-  {
-    zone: 'West zone',
-    data: [
-      { branch: 'Mumbai', employee: 'Rahul Verma', market: true },
-      { branch: 'Pune', employee: 'Sneha', market: true },
-      { branch: 'Mumbai', employee: 'Rohit', leave: true },
-    ],
-    total: { employees: 3, market: 2, leave: 1, mispunch: 0 },
-  },
-  {
-    zone: 'South zone',
-    data: [
-      { branch: 'Chennai', employee: 'Arjun', market: true },
-      { branch: 'Bangalore', employee: 'Priya', market: true },
-      { branch: 'Bangalore', employee: 'Karan', mispunch: true },
-    ],
-    total: { employees: 3, market: 2, leave: 0, mispunch: 1 },
-  },
-];
-
 const AttendanceViewAllScreen = ({ navigation }: any) => {
-  const [tab, setTab] = useState<'ASR' | 'DSR'>('ASR');
   const [activeFilter, setActiveFilter] = useState('User');
-  const [sections, setSections] = useState([]);
-  const [summary, setSummary] = useState<any>(null);
-  const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [sections, setSections] = useState<SectionType[]>([]);
   const [activeModal, setActiveModal] = useState<
-    'user' | 'branch' | 'zone' | 'type' | null
+    'user' | 'zone' | 'type' | null
   >(null);
   const [filters, setFilters] = useState({
     user: null as number | null,
-    branch: '' as string,
     zone: '' as string,
     type: '' as 'punch_in' | 'not_punch_in' | 'leave' | '',
   });
 
-  const [filterData, setFilterData] = useState({
+  const [filterData, setFilterData] = useState<{ users: any[]; zones: string[] }>({
     users: [],
-    branches: [],
     zones: [],
   });
 
@@ -141,7 +96,6 @@ const AttendanceViewAllScreen = ({ navigation }: any) => {
 
       setFilterData({
         users: data.users || [],
-        branches: normalizeNameList(data.branches || []),
         zones: normalizeNameList(data.zones || []),
       });
     } catch (e) {
@@ -200,33 +154,6 @@ const AttendanceViewAllScreen = ({ navigation }: any) => {
     )
   };
 
-  const filteredData = DATA.map(section => {
-    if (activeFilter === 'Zone') {
-      return section; // show grouped by zone
-    }
-
-    if (activeFilter === 'Branch') {
-      return {
-        ...section,
-        data: [...section.data].sort((a, b) =>
-          a.branch.localeCompare(b.branch)
-        ),
-      };
-    }
-
-    if (activeFilter === 'User') {
-      return {
-        ...section,
-        data: [...section.data].sort((a, b) =>
-          a.employee.localeCompare(b.employee)
-        ),
-      };
-    }
-
-    return section;
-  });
-
-
   const getZoneShort = (zone: string) => {
     return zone
       .split(' ')
@@ -235,50 +162,10 @@ const AttendanceViewAllScreen = ({ navigation }: any) => {
       .toUpperCase();
   };
 
-  const toggleSelection = (key: 'users' | 'branches' | 'zones', value: any) => {
-    const list: any = filters[key];
-
-    if (list.includes(value)) {
-      setFilters({
-        ...filters,
-        [key]: list.filter((v: any) => v !== value),
-      });
-    } else {
-      setFilters({
-        ...filters,
-        [key]: [...list, value],
-      });
-    }
-  };
-
-  const resetFilters = () => {
-    setFilters({
-      users: [],
-      branches: [],
-      zones: [],
-      type: '',
-    });
-  };
-
-  const applyFilters = () => {
-    console.log('APPLIED FILTERS:', filters);
-
-    // 👉 call your attendance API here with params
-  };
-
-  const removeFilter = (key: 'users' | 'branches' | 'zones', value: any) => {
-    setFilters({
-      ...filters,
-      [key]: filters[key].filter((v: any) => v !== value),
-    });
-  };
-
   const getModalData = () => {
     switch (activeModal) {
       case 'user':
         return filterData.users;
-      case 'branch':
-        return filterData.branches;
       case 'zone':
         return filterData.zones;
       case 'type':
@@ -299,7 +186,6 @@ const AttendanceViewAllScreen = ({ navigation }: any) => {
 
   const checkSelected = (value: any) => {
     if (activeModal === 'user') return filters.user === value;
-    if (activeModal === 'branch') return filters.branch === value;
     if (activeModal === 'zone') return filters.zone === value;
     if (activeModal === 'type') return filters.type === value;
 
@@ -310,39 +196,33 @@ const AttendanceViewAllScreen = ({ navigation }: any) => {
     let updatedFilters = { ...filters };
 
     if (activeModal === 'user') updatedFilters.user = value;
-    if (activeModal === 'branch') updatedFilters.branch = value;
     if (activeModal === 'zone') updatedFilters.zone = value;
     if (activeModal === 'type') updatedFilters.type = value;
 
     setFilters(updatedFilters);
     setActiveModal(null);
-
-    // 🔥 Call API after selection
-    setTimeout(() => {
-      fetchAttendanceWithFilters(updatedFilters, tab);
-    }, 0);
   };
 
-  const fetchAttendanceWithFilters = async (customFilters: any, tab?: any) => {
+  const fetchAttendanceWithFilters = async (customFilters: any) => {
     const token = store.getState()?.auth?.token;
     try {
-      // let url = 'https://duke.fieldkonnect.in/api/today-attendance-zone?user_id=1';
-      let url = 'https://duke.fieldkonnect.in/api/today-attendance-zone?designation=' + (tab || 'asr');
-
-      if (customFilters.branch) {
-        url += `&branch=${encodeURIComponent(customFilters.branch)}`;
-      }
+      let url = 'https://duke.fieldkonnect.in/api/today-attendance-zone';
+      const queryParams: string[] = [];
 
       if (customFilters.zone) {
-        url += `&zone=${encodeURIComponent(customFilters.zone.toLowerCase())}`;
+        queryParams.push(`zone=${encodeURIComponent(customFilters.zone.toLowerCase())}`);
       }
 
       if (customFilters.user) {
-        url += `&user_id=${customFilters.user}`;
+        queryParams.push(`user_id=${encodeURIComponent(String(customFilters.user))}`);
       }
 
       if (customFilters.type) {
-        url += `&status=${customFilters.type}`;
+        queryParams.push(`status=${encodeURIComponent(customFilters.type)}`);
+      }
+
+      if (queryParams.length > 0) {
+        url += `?${queryParams.join('&')}`;
       }
 
       const res = await fetch(url, {
@@ -355,59 +235,14 @@ const AttendanceViewAllScreen = ({ navigation }: any) => {
       const json = await res.json();
 
       if (json.success) {
-        setSections(formatData(json.data.zones));
-        setSummary(json.data.summary);
+        setSections(formatData(json.data?.zones || []));
       }
     } catch (err) {
       console.log(err);
     }
   };
 
-  // const fetchAttendance = async () => {
-  //   const token = store.getState()?.auth?.token;
-  //   try {
-  //     let url = 'https://duke.fieldkonnect.in/api/today-attendance-zone?designation=asr';
-
-  //     // 👉 Append only if selected
-  //     if (filters.branch) {
-  //       url += `&branch=${encodeURIComponent(filters.branch)}`;
-  //     }
-
-  //     if (filters.zone) {
-  //       url += `&zone=${encodeURIComponent(filters.zone.toLowerCase())}`;
-  //     }
-
-  //     if (filters.user) {
-  //       url += `&user_id=${filters.user}`;
-  //     }
-
-  //     if (filters.type) {
-  //       url += `&status=${filters.type}`;
-  //     }
-
-  //     console.log('API URL:', url);
-
-  //     const res = await fetch(url, {
-  //       headers: {
-  //         Authorization: `Bearer ${token}`,
-  //         Accept: 'application/json',
-  //       },
-  //     });
-
-  //     const json = await res.json();
-
-  //     console.log(json, 'ressdfasdfasdfasdf')
-  //     if (json.success) {
-  //       const formatted = formatData(json.data.zones);
-  //       setSections(formatted);
-  //       setSummary(json.data.summary);
-  //     }
-  //   } catch (err) {
-  //     console.log(err);
-  //   }
-  // };
-
-  const formatData = (zones: any[]) => {
+  const formatData = (zones: any[]): SectionType[] => {
     return zones.map((z) => {
       const market = z.users.filter((u: any) => u.punchin && !u.on_leave).length;
       const leave = z.users.filter((u: any) => u.on_leave).length;
@@ -434,7 +269,7 @@ const AttendanceViewAllScreen = ({ navigation }: any) => {
   };
 
   useEffect(() => {
-    fetchAttendanceWithFilters(filters, tab);
+    fetchAttendanceWithFilters(filters);
   }, [filters]);
 
 
@@ -475,40 +310,6 @@ const AttendanceViewAllScreen = ({ navigation }: any) => {
         </AppText>
       </View>
 
-      {/* TABS */}
-      <View style={{ backgroundColor: colors.blue }}>
-        <View style={styles.tabs}>
-          {['ASR', 'DSR'].map(t => (
-            <Pressable
-              key={t}
-              onPress={() => {
-                setTab(t as any)
-                const filterData: any = {
-                  user: null,
-                  branch: '',
-                  zone: '',
-                  type: '',
-                }
-                setFilters(filterData);
-                // fetchAttendanceWithFilters(filterData, t);
-              }}
-              style={[
-                styles.tab,
-                tab === t ? styles.activeTab : styles.inactiveTab,
-              ]}
-            >
-              <AppText
-                size={16}
-                family={'InterBold'}
-                color={tab === t ? colors.white : '#666'}
-              >
-                {t}
-              </AppText>
-            </Pressable>
-          ))}
-        </View>
-      </View>
-
       {/* FILTERS */}
       <View style={styles.selectedFiltersContainer}>
 
@@ -523,16 +324,6 @@ const AttendanceViewAllScreen = ({ navigation }: any) => {
             </Text>
           </Pressable>
         )}
-
-        {/* BRANCH */}
-        {filters.branch ? (
-          <Pressable
-            onPress={() => setFilters({ ...filters, branch: '' })}
-            style={styles.selectedChip}
-          >
-            <Text>{filters.branch} ✕</Text>
-          </Pressable>
-        ) : null}
 
         {/* ZONE */}
         {filters.zone ? (
@@ -558,11 +349,11 @@ const AttendanceViewAllScreen = ({ navigation }: any) => {
 
       </View>
       <View style={styles.filters}>
-        {['User', 'Branch', 'Zone', 'Type'].map((f, i) => (
+        {['User', 'Zone', 'Type'].map((f, i) => (
           <Pressable
             key={i}
             onPress={() => {
-              setFilterModalVisible(true)
+              setActiveFilter(f)
               setActiveModal(f.toLowerCase() as any)
             }}
             style={[
@@ -732,36 +523,6 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
   },
-  // tabs: {
-  //     flexDirection: 'row',
-  //     backgroundColor: colors.blue,
-  //     paddingHorizontal: 16,
-  //     paddingBottom: 16
-  // },
-  tabs: {
-    flexDirection: 'row',
-    margin: 16,
-    backgroundColor: '#e5e6ef',
-    borderRadius: 30,
-    padding: 4,
-  },
-
-  tab: {
-    flex: 1,
-    padding: 8,
-    borderRadius: 30,
-    alignItems: 'center',
-  },
-
-  activeTab: {
-    backgroundColor: colors.blue,
-  },
-
-  inactiveTab: {
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.4)',
-  },
-
   filters: {
     padding: 10,
     flexDirection: 'row',

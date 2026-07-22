@@ -524,14 +524,16 @@ const CustomerCard: React.FC<SolarCardProps> = ({
         {/* {
           !type ? ( */}
             <TouchableOpacity style={[styles.addOrderButton, { width: '36%' }]} onPress={() => {
-              const customerTypeId = item?.customer_type_id || item?.customertype;
-              const customerTypeName = item?.customer_type || item?.type;
+              const orderCustomer: any = item;
+              const customerId = orderCustomer?.customer_id ?? orderCustomer?.id;
+              const customerTypeId = orderCustomer?.customer_type_id || orderCustomer?.customertype;
+              const customerTypeName = orderCustomer?.customer_type || orderCustomer?.type;
               const isDistributor =
                 String(customerTypeName || '').toLowerCase().includes('distributor');
               navigation.navigate("ProductCatalogue", {
-                customer_id: item?.id,
-                retailer_id: isDistributor ? undefined : item?.id,
-                distributor_id: isDistributor ? item?.id : item?.distributor_name,
+                customer_id: customerId,
+                retailer_id: isDistributor ? undefined : customerId,
+                distributor_id: isDistributor ? customerId : orderCustomer?.distributor_id,
                 customer: item,
                 type: customerTypeName || (isDistributor ? "Distributor" : "Retailer"),
                 customer_type_id: customerTypeId,

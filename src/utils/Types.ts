@@ -18,7 +18,7 @@ export type RootStackParamList = {
   CustomerDetails: undefined;
   TourPlanPage: undefined;
   ForceUpdateScreen: undefined;
-  CreatePlan: undefined;
+  CreatePlan: undefined | { item: number | string };
   BottomTab: undefined;
   CustomerList: {
     type?: string;
@@ -96,6 +96,7 @@ export type loginParmas ={
   app_version?: any
   device_name?: any
   device_type?: any
+  unique_id?: string
 }
 
 export type signupParmas ={

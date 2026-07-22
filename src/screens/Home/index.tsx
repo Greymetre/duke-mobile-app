@@ -171,11 +171,11 @@ const Home = () => {
     // { label: 'Leave', value: 'Leave' },
   ];
 
+  const casualBalance = Number(leaveBalances?.casual ?? 0);
+  const compOffBalance = Number(leaveBalances?.comp_off ?? 0);
   const balanceTypes = [
-    { label: 'Leave', value: 'Casual Balance' },
-    // { label: 'Sick Balance', value: 'Sick Balance' },
-    // { label: 'Earned Balance', value: 'Earned Balance' },
-    { label: 'Comp-off', value: 'Comp-off Balance' },
+    { label: `Casual Leave (${casualBalance})`, value: 'casual' },
+    { label: `Comp-off (${compOffBalance})`, value: 'comp_off' },
   ];
   // Your token – in real app use secure storage / redux / context
 
@@ -300,6 +300,34 @@ const Home = () => {
       Toast.show({ type: "info", text1: "Please fill all required fields" })
       return;
     }
+    const millisecondsPerDay = 24 * 60 * 60 * 1000;
+    const inclusiveDays = Math.floor(
+      (new Date(toDate).setHours(0, 0, 0, 0) - new Date(fromDate).setHours(0, 0, 0, 0)) /
+      millisecondsPerDay,
+    ) + 1;
+    if (inclusiveDays <= 0) {
+      const message = 'To date cannot be before from date';
+      setErrorLeave(message);
+      Toast.show({ type: 'error', text1: message });
+      return;
+    }
+    const isHalfDay = selectedType === 'First Half Leave' || selectedType === 'Second Half Leave';
+    if (isHalfDay && inclusiveDays !== 1) {
+      const message = 'Half-day leave must start and end on the same date';
+      setErrorLeave(message);
+      Toast.show({ type: 'error', text1: message });
+      return;
+    }
+    const requiredBalance = isHalfDay ? 0.5 : inclusiveDays;
+    const availableBalance = selectedBalType === 'comp_off' ? compOffBalance : casualBalance;
+    if (availableBalance < requiredBalance) {
+      const balanceLabel = selectedBalType === 'comp_off' ? 'Comp-off' : 'Casual Leave';
+      const message = `Insufficient ${balanceLabel} balance. Available: ${availableBalance}, Required: ${requiredBalance}`;
+      setErrorLeave(message);
+      Toast.show({ type: 'error', text1: message });
+      return;
+    }
+    setErrorLeave('');
     setLoaderLeave(true)
     try {
       const token = store.getState()?.auth?.token;
@@ -310,7 +338,9 @@ const Home = () => {
         from_date: fromDate.toISOString().split('T')[0],
         to_date: toDate.toISOString().split('T')[0],
         type: selectedType,
-        bal_type: selectedBalType,
+        // addLeaves validates these exact display values, while the balance
+        // endpoint uses the canonical keys casual and comp_off.
+        bal_type: selectedBalType === 'comp_off' ? 'Comp-off Balance' : 'Casual Balance',
         reason: reason.trim(),
       };
 
@@ -1109,7 +1139,10 @@ const Home = () => {
                 valueField="value"
                 placeholder="Select balance type"
                 value={selectedBalType}
-                onChange={(item) => setSelectedBalType(item.value)}
+                onChange={(item) => {
+                  setSelectedBalType(item.value);
+                  setErrorLeave('');
+                }}
               />
 
               <AppText size={15} family="InterMedium" style={{ marginBottom: 8 }}>

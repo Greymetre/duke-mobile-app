@@ -16,6 +16,7 @@ import Toast from 'react-native-toast-message';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { initializeLiveLocationTracking } from '../../services/liveLocationService';
 import { ANDROID_APP_VERSION } from '../../utils/appVersion';
+import { getDeviceName, getUniqueDeviceId } from '../../utils/deviceIdentity';
 
 type LoginFormValues = {
   email: string;
@@ -27,21 +28,6 @@ const APP_VERSION =
     android: ANDROID_APP_VERSION,
     ios: '2.3',
   }) || ANDROID_APP_VERSION;
-
-const getDeviceName = () => {
-  const constants = Platform.constants as Record<string, any>;
-  const androidName = [constants.Brand, constants.Model].filter(Boolean).join(' ');
-
-  if (androidName) {
-    return androidName;
-  }
-
-  if (Platform.OS === 'ios') {
-    return constants.interfaceIdiom || constants.systemName || 'iOS';
-  }
-
-  return Platform.OS;
-};
 
 const LoginScreen = ({ navigation }: { navigation: any }) => {
   const dispatch = useDispatch();
@@ -77,9 +63,17 @@ const LoginScreen = ({ navigation }: { navigation: any }) => {
         app_version: APP_VERSION,
         device_name: getDeviceName(),
         device_type: Platform.OS,
+        unique_id: getUniqueDeviceId(),
       };
 
       const res = await mutateLogin(params);
+
+      // The API client already displays HTTP 400 messages. Stop here so a
+      // device-login restriction is not replaced by a generic login error.
+      if (typeof res === 'string') {
+        setServerError(res);
+        return;
+      }
 
       if (res?.data?.status === 'success') {
         dispatch(setUser(res?.data?.userinfo));

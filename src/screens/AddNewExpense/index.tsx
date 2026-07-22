@@ -17,6 +17,10 @@ import { styles } from './styles';
 const todayIso = () => new Date().toISOString().slice(0, 10);
 const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024;
 const ALLOWED_ATTACHMENT_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
+const ALLOWANCE_TYPE = {
+  TRAVELLING: '1',
+  DAILY: '2',
+} as const;
 
 const getPayrollId = (user: any) =>
   user?.payroll_id ||
@@ -42,10 +46,8 @@ const normalizeTypes = (payload: any) => {
   })).filter((item: any) => item.value);
 };
 
-const requiresKm = (label?: string) => {
-  const normalized = String(label || '').toLowerCase();
-  return normalized.includes('bike') || normalized.includes('car') || normalized.includes('km');
-};
+const isTravellingAllowance = (allowanceTypeId?: string | number) =>
+  String(allowanceTypeId ?? '') === ALLOWANCE_TYPE.TRAVELLING;
 
 const roundedAmount = (value: any) => String(Math.round(Number(value || 0)));
 
@@ -98,8 +100,11 @@ const AddNewExpense = () => {
     () => expenseTypes.find((item) => String(item.value) === String(selectedType)),
     [expenseTypes, selectedType],
   );
-  const showKmFields = requiresKm(selectedTypeItem?.label);
-  const isAutoClaimAmount = String(selectedTypeItem?.allowanceTypeId || '') === '1';
+  const selectedAllowanceTypeId = selectedTypeItem?.allowanceTypeId ?? editExpense?.allowance_type_id;
+  const isTravelling = isTravellingAllowance(selectedAllowanceTypeId);
+  const showKmFields = isTravelling;
+  const isAutoClaimAmount = isTravelling;
+  const attachmentRequired = isTravelling;
   const totalKm = useMemo(() => {
     const start = Number(startKm || 0);
     const stop = Number(stopKm || 0);
@@ -241,6 +246,10 @@ const AddNewExpense = () => {
       Toast.show({ type: 'error', text1: 'Please enter valid start and stop km' });
       return false;
     }
+    if (attachmentRequired && attachments.length + existingAttachments.length === 0) {
+      Toast.show({ type: 'error', text1: 'At least one expense attachment is required' });
+      return false;
+    }
     return true;
   };
 
@@ -312,8 +321,8 @@ const AddNewExpense = () => {
               setRate(nextRate);
               setStartKm('');
               setStopKm('');
-              if (String(item.allowanceTypeId || '') === '1') {
-                setClaimAmount(roundedAmount(requiresKm(item.label) ? 0 : nextRate));
+              if (isTravellingAllowance(item.allowanceTypeId)) {
+                setClaimAmount('0');
               } else {
                 setClaimAmount('');
               }
@@ -429,7 +438,7 @@ const AddNewExpense = () => {
               {attachments.length || existingAttachments.length ? `${attachments.length + existingAttachments.length} attachment(s) selected` : 'Expense Attachment'}
             </AppText>
             <AppText size={12} color="#C25050" family="InterRegular" horizontal={6}>
-              Images/PDF, max 5 MB each
+              {attachmentRequired ? 'Required · Images/PDF, max 5 MB each' : 'Images/PDF, max 5 MB each'}
             </AppText>
           </View>
         </View>

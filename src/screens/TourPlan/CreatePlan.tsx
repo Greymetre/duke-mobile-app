@@ -22,7 +22,10 @@ import store from '../../components/redux/Store';
 import { BASE_URL } from '../../api/AxiosClient';
 import { SCREEN_HEIGHT } from '../../utils/misc';
 import { fonts } from '../../utils/typography';
-import ActionSheet, { ActionSheetRef } from 'react-native-actions-sheet';
+import ActionSheet, {
+  ActionSheetRef,
+  FlatList as ActionSheetFlatList,
+} from 'react-native-actions-sheet';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getTourObjectivesApi, normalizeTourObjectives } from '../../api/query/TourPlanApi';
 
@@ -96,11 +99,16 @@ const CreatePlan: React.FC = ({ navigation, route }: any) => {
 
   // Objective bottom sheet
   const objectiveSheetRef = useRef<ActionSheetRef>(null);
+  const objectiveListRef = useRef<any>(null);
   const [sheetRowId, setSheetRowId] = useState<string | null>(null);
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [otherText, setOtherText] = useState('');
   const [objectiveOptions, setObjectiveOptions] = useState<DropdownItem[]>([]);
   const [objectivesLoading, setObjectivesLoading] = useState(false);
+  const isOtherObjective = (value: string) => {
+    const normalizedValue = value.trim().toLowerCase();
+    return normalizedValue === 'other' || normalizedValue === 'others';
+  };
 
   // ────────────────────────────────────────────────
   // Fetch users & districts on mount
@@ -318,7 +326,8 @@ const CreatePlan: React.FC = ({ navigation, route }: any) => {
 
     const parts = current.split(',').map(s => s.trim()).filter(Boolean);
 
-    const fixedOptions = objectiveOptions.map(item => item.label);
+    const fixedOptions = objectiveOptions.map(item => String(item.label));
+    const otherOption = fixedOptions.find(isOtherObjective) || 'Other';
 
     // 1. Find which of the fixed options are selected
     const preSelected = fixedOptions.filter(opt => parts.includes(opt));
@@ -330,8 +339,8 @@ const CreatePlan: React.FC = ({ navigation, route }: any) => {
     let finalSelected = preSelected;
 
     // If we have custom text but "Other" is not in the list → add it
-    if (customParts.length > 0 && !finalSelected.includes('Other') && fixedOptions.includes('Other')) {
-      finalSelected = [...finalSelected, 'Other'];
+    if (customParts.length > 0 && !finalSelected.some(isOtherObjective)) {
+      finalSelected = [...finalSelected, otherOption];
     }
 
     const customText = customParts.join(', ');
@@ -347,7 +356,8 @@ const CreatePlan: React.FC = ({ navigation, route }: any) => {
     if (!sheetRowId) return;
 
     // ── NEW VALIDATION ──
-    if (selectedOptions.includes('Other') && !otherText.trim()) {
+    const hasOther = selectedOptions.some(isOtherObjective);
+    if (hasOther && !otherText.trim()) {
       Toast.show({
         type: 'error',
         text1: 'Please specify the objective',
@@ -356,9 +366,9 @@ const CreatePlan: React.FC = ({ navigation, route }: any) => {
       return; // ← prevent closing / saving
     }
 
-    let final = selectedOptions.filter(item => item !== 'Other');
+    let final = selectedOptions.filter(item => !isOtherObjective(item));
 
-    if (selectedOptions.includes('Other') && otherText.trim()) {
+    if (hasOther && otherText.trim()) {
       final.push(otherText.trim());
     }
 
@@ -996,14 +1006,23 @@ const CreatePlan: React.FC = ({ navigation, route }: any) => {
             Select Objective
           </AppText>
 
-          <ScrollView style={{ maxHeight: 340 }}>
-            {objectivesLoading ? (
+          <ActionSheetFlatList<DropdownItem>
+            ref={objectiveListRef}
+            data={objectiveOptions}
+            style={{ maxHeight: 380 }}
+            contentContainerStyle={{ paddingBottom: 8 }}
+            nestedScrollEnabled
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator
+            keyExtractor={item => String(item.value)}
+            ListEmptyComponent={objectivesLoading ? (
               <ActivityIndicator color={colors.blue} />
-            ) : objectiveOptions.length === 0 ? (
+            ) : (
               <AppText size={15} color="#999" align="center" style={{ marginTop: 20 }}>
                 No objectives available
               </AppText>
-            ) : objectiveOptions.map(option => {
+            )}
+            renderItem={({ item: option }) => {
               const opt = option.label;
               return (
               <TouchableOpacity
@@ -1018,11 +1037,19 @@ const CreatePlan: React.FC = ({ navigation, route }: any) => {
                   backgroundColor: selectedOptions.includes(opt) ? 'rgba(57,82,153,0.08)' : 'transparent',
                 }}
                 onPress={() => {
+                  const isSelecting = !selectedOptions.includes(opt);
+
                   setSelectedOptions(prev =>
                     prev.includes(opt)
                       ? prev.filter(o => o !== opt)
                       : [...prev, opt]
                   );
+
+                  if (isSelecting && isOtherObjective(opt)) {
+                    setTimeout(() => {
+                      objectiveListRef.current?.scrollToEnd({ animated: true });
+                    }, 100);
+                  }
                 }}
               >
                 <View
@@ -1041,9 +1068,8 @@ const CreatePlan: React.FC = ({ navigation, route }: any) => {
                 </AppText>
               </TouchableOpacity>
               );
-            })}
-
-            {selectedOptions.includes('Other') && (
+            }}
+            ListFooterComponent={selectedOptions.some(isOtherObjective) ? (
               <View
                 style={{
                   marginTop: 12,
@@ -1070,8 +1096,8 @@ const CreatePlan: React.FC = ({ navigation, route }: any) => {
                   maxLength={120}
                 />
               </View>
-            )}
-          </ScrollView>
+            ) : null}
+          />
 
           <TouchableOpacity
             onPress={saveObjective}

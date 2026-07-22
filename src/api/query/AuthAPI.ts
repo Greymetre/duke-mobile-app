@@ -12,6 +12,10 @@ export const useMutateLogin = () => {
       axiosClient.post(API_ENDPOINT.LOGIN, payload),
   });
 };
+
+export const logoutApi = () =>
+  axiosClient.post(API_ENDPOINT.LOGOUT);
+
 export const useMutateSignup = () => {
   return useMutation({
     mutationFn: (payload: signupParmas) =>
