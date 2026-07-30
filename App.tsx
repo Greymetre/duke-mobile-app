@@ -6,17 +6,15 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { Button, PermissionsAndroid, Platform, StatusBar, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Platform, StatusBar, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Provider } from 'react-redux';
 import { PersistGate } from 'redux-persist/integration/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
-  createNavigationContainerRef,
   DefaultTheme,
   NavigationContainer,
-  NavigationContainerRef,
 } from '@react-navigation/native';
 import { KeyboardProvider } from "react-native-keyboard-controller";
 
@@ -34,6 +32,10 @@ import {
   initializeLiveLocationTracking,
   runAndroidFirstTimeLiveLocationSetup,
 } from './src/services/liveLocationService';
+import {
+  subscribeToForegroundNotifications,
+  subscribeToNotificationPresses,
+} from './src/utils/firebaseMessaging';
 ;
 
 
@@ -41,14 +43,43 @@ const queryClient = new QueryClient();
 
 const App = () => {
   const [loading, setLoading] = useState(true);
+  const loadingRef = React.useRef(true);
+  const pendingNotificationNavigationRef = React.useRef(false);
   // const navigationRef = React.useRef<NavigationContainerRef<any>>(null);
   //  const navigationRef = createNavigationContainerRef();
 
   useEffect(() => {
+    const openNotificationList = () => {
+      if (!loadingRef.current && navigationRef.isReady()) {
+        navigationRef.navigate('Notifications');
+        pendingNotificationNavigationRef.current = false;
+      } else {
+        pendingNotificationNavigationRef.current = true;
+      }
+    };
+    const unsubscribeForeground = subscribeToForegroundNotifications();
+    const unsubscribePresses = subscribeToNotificationPresses(openNotificationList);
+
     setTimeout(() => {
+      loadingRef.current = false;
       setLoading(false);
     }, 2000);
+
+    return () => {
+      unsubscribeForeground();
+      unsubscribePresses();
+    };
   }, []);
+
+  useEffect(() => {
+    if (!loading && navigationRef.isReady() && pendingNotificationNavigationRef.current) {
+      const timer = setTimeout(() => {
+        navigationRef.navigate('Notifications');
+        pendingNotificationNavigationRef.current = false;
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [loading]);
 
   const initializeAfterRehydrate = () => {
     void runAndroidFirstTimeLiveLocationSetup();
@@ -97,7 +128,10 @@ const App = () => {
                     ref={navigationRef}
                     theme={MyTheme}
                     onReady={() => {
-                      // Navigation is ready
+                      if (!loadingRef.current && pendingNotificationNavigationRef.current) {
+                        navigationRef.navigate('Notifications');
+                        pendingNotificationNavigationRef.current = false;
+                      }
                       console.log('Navigation is ready');
                     }}
                   >

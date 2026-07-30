@@ -2,7 +2,7 @@ import { View, ScrollView, StatusBar, Switch, FlatList, Pressable, TouchableOpac
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { styles } from './styles'
 import { rw } from '../../utils/responsive'
-import { FirstUserIcon, LogoIcon, SecondUserIcon, VillageIcon } from '../../assets/svgs/HomePageSvgs'
+import { FirstUserIcon, LogoIcon, SecondUserIcon } from '../../assets/svgs/HomePageSvgs'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import AppText from '../../components/AppText/AppText'
 import { CrossIcon } from '../../assets/svgs/SvgsFile'
@@ -36,6 +36,7 @@ import { DashboardAlerts, DashboardHighlights, ZonePerformanceCard } from '../..
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { startLiveLocationTracking, stopLiveLocationTracking } from '../../services/liveLocationService'
 import { ANDROID_APP_VERSION, compareVersions } from '../../utils/appVersion'
+import NotificationBell from '../../components/NotificationBell'
 
 interface DropdownItem {
   label: string;
@@ -767,6 +768,16 @@ const Home = () => {
                   <LogoIcon />
                 </Pressable>
                 <View style={[styles.row, styles.button]}>
+                  <Pressable
+                    style={styles.applyLeaveButton}
+                    onPress={() => {
+                      setErrorLeave('')
+                      setShowLeaveModal(true);
+                      fetchLeaveBalances();
+                    }}>
+                    <AppText color={colors.blue} size={10} family='InterSemiBold' align='center'>Apply Leave</AppText>
+                  </Pressable>
+                  <NotificationBell />
                   {loadingPunchStatus ? (
                     <AppText size={14} color="white">...</AppText>
                   ) : (
@@ -790,20 +801,6 @@ const Home = () => {
 
                     </>
                   )}
-                  <Pressable
-                    onPress={() => {
-                      // Toast.show({
-                      //   type: 'info',
-                      //   text1: 'This feature is coming soon',
-                      //   position: 'top',
-                      // });
-                      setErrorLeave('')
-                      setShowLeaveModal(true);
-                      fetchLeaveBalances();
-                    }}
-                  >
-                    <VillageIcon />
-                  </Pressable>
                 </View>
               </View>
               <View style={styles.helloName}>

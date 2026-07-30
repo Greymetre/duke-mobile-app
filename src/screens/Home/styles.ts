@@ -27,7 +27,15 @@ export const styles = StyleSheet.create({
         alignItems: 'center',
     },
     button: {
-        gap: 16
+        gap: 10
+    },
+    applyLeaveButton: {
+        height: 28,
+        paddingHorizontal: 9,
+        borderRadius: 14,
+        backgroundColor: colors.white,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     helloName: {
         paddingHorizontal: 20

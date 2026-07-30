@@ -13,6 +13,8 @@ export const API_ENDPOINT = {
   GET_USER_DISTRICT_LIST: "api/userDistrictList",
   GET_PINCODES_LIST: "api/get-location-by-pincode",
   GET_PINCODESBYCITY_LIST: "api/getPincodeList",
+  GET_NOTIFICATIONS: "api/getNotification",
+  READ_NOTIFICATION: "api/notifications/read",
 
   //customer 
   MASTER_DISTRIBUTOR_GET: "api/master-distributors?per_page=20",

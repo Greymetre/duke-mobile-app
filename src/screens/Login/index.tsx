@@ -17,6 +17,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { initializeLiveLocationTracking } from '../../services/liveLocationService';
 import { ANDROID_APP_VERSION } from '../../utils/appVersion';
 import { getDeviceName, getUniqueDeviceId } from '../../utils/deviceIdentity';
+import { getFcmToken } from '../../utils/firebaseMessaging';
 
 type LoginFormValues = {
   email: string;
@@ -57,6 +58,7 @@ const LoginScreen = ({ navigation }: { navigation: any }) => {
     setSubmitting(true);
 
     try {
+      const fcmToken = await getFcmToken();
       const params = {
         username: values.email.trim(),
         password: values.password,
@@ -64,6 +66,7 @@ const LoginScreen = ({ navigation }: { navigation: any }) => {
         device_name: getDeviceName(),
         device_type: Platform.OS,
         unique_id: getUniqueDeviceId(),
+        fcm_token: fcmToken ?? undefined,
       };
 
       const res = await mutateLogin(params);

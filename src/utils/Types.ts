@@ -61,6 +61,7 @@ export type RootStackParamList = {
   AttendanceViewAllScreen:undefined
   TargetArchieViewAllScreen:undefined
   RetailersPerformanceViewAllScreen:undefined
+  Notifications: undefined
 };
 
 export type AppTextProps = {
@@ -97,6 +98,7 @@ export type loginParmas ={
   device_name?: any
   device_type?: any
   unique_id?: string
+  fcm_token?: string
 }
 
 export type signupParmas ={

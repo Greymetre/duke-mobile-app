@@ -17,6 +17,12 @@ end
 target 'FieldConnect' do
   config = use_native_modules!
 
+  # Firebase's Swift internals need module maps when linked as static pods.
+  # Keep this scoped to Firebase dependencies: enabling modular headers
+  # globally creates duplicate React Native `react_runtime` module maps.
+  pod 'FirebaseCoreInternal', :modular_headers => true
+  pod 'GoogleUtilities', :modular_headers => true
+
   use_react_native!(
     :path => config[:reactNativePath],
     :hermes_enabled => true,
