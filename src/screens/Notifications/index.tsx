@@ -1,5 +1,5 @@
 import React, {useCallback, useState} from 'react';
-import {ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, View} from 'react-native';
+import {ActivityIndicator, FlatList, Image, Pressable, RefreshControl, StyleSheet, View} from 'react-native';
 import {NavigationProp, ParamListBase, useFocusEffect, useNavigation} from '@react-navigation/native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import AppText from '../../components/AppText/AppText';
@@ -106,6 +106,7 @@ const Notifications = () => {
               <View style={styles.titleRow}>{!item.read && <View style={styles.unreadDot} />}<AppText size={15} family={item.read ? 'InterMedium' : 'InterBold'} numLines={1} style={styles.title}>{item.type || 'FieldKonnect'}</AppText></View>
               {readingId === item.id && <ActivityIndicator size="small" color={colors.blue} />}
             </View>
+            {!!item.image && <Image source={{uri: item.image}} style={styles.notificationImage} resizeMode="cover" />}
             <AppText size={14} color="#4F4F4F" lineHeight={20}>{item.data}</AppText>
             <AppText size={11} color="#8A8A8A" style={styles.date}>{formatDate(item.created_at)}</AppText>
           </Pressable>
@@ -126,6 +127,7 @@ const styles = StyleSheet.create({
   titleRow: {flex: 1, flexDirection: 'row', alignItems: 'center'},
   title: {flex: 1},
   unreadDot: {width: 8, height: 8, borderRadius: 4, backgroundColor: colors.blue, marginRight: 8},
+  notificationImage: {width: '100%', height: 180, borderRadius: 10, marginBottom: 10, backgroundColor: '#EDEDED'},
   date: {marginTop: 10},
   footer: {paddingVertical: 16},
 });

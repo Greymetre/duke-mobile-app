@@ -34,10 +34,21 @@ export const getFcmToken = async (): Promise<string | null> => {
 const displayForegroundNotification = async (message: FirebaseMessagingTypes.RemoteMessage) => {
   const title = message.notification?.title || String(message.data?.title || 'FieldKonnect');
   const body = message.notification?.body || String(message.data?.body || 'You have a new notification.');
+  const image = message.notification?.android?.imageUrl
+    || message.notification?.apple?.imageUrl
+    || (message.data?.image ? String(message.data.image) : undefined);
   const channelId = await notifee.createChannel({id: CHANNEL_ID, name: 'FieldConnect Notifications', importance: AndroidImportance.HIGH});
   await notifee.displayNotification({
     title, body, data: message.data,
-    android: {channelId, importance: AndroidImportance.HIGH, style: {type: AndroidStyle.BIGTEXT, text: body}, pressAction: {id: 'default'}},
+    android: {
+      channelId,
+      importance: AndroidImportance.HIGH,
+      style: image
+        ? {type: AndroidStyle.BIGPICTURE, picture: image}
+        : {type: AndroidStyle.BIGTEXT, text: body},
+      pressAction: {id: 'default'},
+    },
+    ios: image ? {attachments: [{url: image}]} : undefined,
   });
 };
 

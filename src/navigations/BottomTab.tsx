@@ -1,10 +1,6 @@
-import { View, Text, Platform } from 'react-native'
+import { View, Platform } from 'react-native'
 import React from 'react'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import CustomerDetails from '../screens/Customer/CustomerDetails';
-import TourPlanPage from '../screens/TourPlan';
-import CreatePlan from '../screens/TourPlan/CreatePlan';
-import ExpenseReport from '../screens/ExpenseReport';
 import CustomHeader from '../components/Header';
 import { SCREEN_WIDTH } from '../utils/misc';
 import { colors } from '../utils/Colors';
@@ -12,9 +8,8 @@ import { ActiveHomeIcon, ActiveTaskIcon, ActiveTwoMenIcon, HomeIcon, MessageIcon
 import AppText from '../components/AppText/AppText';
 import Home from '../screens/Home';
 import OrderList from '../screens/OrderScreen';
-import MarketIntelligenceScreen from '../screens/MarketIntelligence';
+import News from '../screens/News';
 import BeatsScreen from '../screens/BeatScreen';
-import Toast from 'react-native-toast-message';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppSelector } from '../components/redux/Store';
 const Tab = createBottomTabNavigator();
@@ -104,22 +99,11 @@ const BottomTab = () => {
         ),
       }} /> */}
       <Tab.Screen
-        name="MarketIntelligenceScreen"
-        component={MarketIntelligenceScreen}
-        listeners={{
-          tabPress: (e) => {
-            e.preventDefault(); // ❌ stop navigation
-
-            Toast.show({
-              type: 'info',
-              text1: 'This feature is coming soon',
-              position: 'top',
-            });
-          },
-        }}
+        name="News"
+        component={News}
         options={{
-          headerShown: true,
-          title: 'Market Intelligence',
+          headerShown: false,
+          title: 'News',
           tabBarIcon: ({ focused }) => (
             <View
               style={{
@@ -141,7 +125,7 @@ const BottomTab = () => {
                 family={focused ? 'InterRegular' : 'InterMedium'}
                 size={13}
               >
-                Intelligence
+                News
               </AppText>
             </View>
           ),
