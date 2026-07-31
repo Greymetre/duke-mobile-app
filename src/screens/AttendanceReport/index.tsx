@@ -24,7 +24,7 @@ interface FilterOption {
   zone_id?: number | string | null;
 }
 
-const AttendanceReport = ({ navigation }: any) => {
+const AttendanceReport = ({ navigation, route }: any) => {
   const [loader, setLoader] = useState(false);
   const [loader1, setLoader1] = useState(false);
   const [punchInStatus, setPunchInStatus] = useState(0);
@@ -239,17 +239,40 @@ const AttendanceReport = ({ navigation }: any) => {
 
   useFocusEffect(
     useCallback(() => {
-      // Initial load: all users, all statuses, normal view
+      const showLeave = route?.params?.reportType === 'leave';
+      const parseRouteDate = (value?: string) => {
+        if (!value) return null;
+        const parts = value.split('-').map(Number);
+        if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
+        return new Date(parts[0], parts[1] - 1, parts[2]);
+      };
+      const routeStart = parseRouteDate(route?.params?.startDate);
+      const routeEnd = parseRouteDate(route?.params?.endDate);
+      const selectedStart = showLeave && routeStart ? new Date(routeStart.getTime()) : startDate;
+      const selectedEnd = showLeave && (routeEnd || routeStart)
+        ? new Date((routeEnd || routeStart as Date).getTime())
+        : endDate;
+
+      setSwitchOption(!showLeave);
+      if (showLeave && routeStart) {
+        selectedStart.setHours(0, 0, 0, 0);
+        selectedEnd.setHours(23, 59, 59, 999);
+        setStartDate(selectedStart);
+        setEndDate(selectedEnd);
+        setRange('custom');
+      }
+      setPage(1);
+      setHasMore(true);
       handleAttendanceList(
-        'normal',
+        showLeave ? 'leave' : 'normal',
         null,
         null,
-        startDate,
-        endDate,
+        selectedStart,
+        selectedEnd,
         1,
         false
       );
-    }, [])
+    }, [route?.params?.reportType, route?.params?.startDate, route?.params?.endDate])
   );
 
   useEffect(() => {
@@ -446,6 +469,20 @@ const AttendanceReport = ({ navigation }: any) => {
 
     setSwitchOption(val);
 
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const filterStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    filterStart.setHours(0, 0, 0, 0);
+
+    const filterEnd = val
+      ? new Date(today)
+      : new Date(today.getFullYear(), today.getMonth() + 2, 0);
+    filterEnd.setHours(23, 59, 59, 999);
+
+    setStartDate(filterStart);
+    setEndDate(filterEnd);
+    setRange(val ? 'currentMonth' : 'custom');
     setPage(1);
     setHasMore(true);
 
@@ -453,8 +490,8 @@ const AttendanceReport = ({ navigation }: any) => {
       val ? 'normal' : 'leave',
       selectedUserId,
       selectedStatus,
-      startDate,
-      endDate,
+      filterStart,
+      filterEnd,
       1,
       false
     );
@@ -934,6 +971,7 @@ const AttendanceReport = ({ navigation }: any) => {
             text1="A"
             text2="L"
             dataPress={onSwitchChange}
+            initialValue={switchOption}
           />
         </View>
 
@@ -954,7 +992,7 @@ const AttendanceReport = ({ navigation }: any) => {
         ) : (
           <FlatList
             data={attendanceList}
-            keyExtractor={(item) => String(item?.attendance_id)}
+            keyExtractor={(item, index) => String(item?.attendance_id ?? item?.leave_id ?? item?.id ?? index)}
             renderItem={renderItem}
 
             onEndReached={loadMoreData}

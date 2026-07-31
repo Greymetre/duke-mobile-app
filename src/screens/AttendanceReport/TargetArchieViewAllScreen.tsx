@@ -53,6 +53,7 @@ const API_BASE = 'https://duke.fieldkonnect.in/api';
 const COLUMN_WIDTHS = [220, 180, 180, 120, 130, 170, 160, 90, 160, 110, 140];
 
 const number = (value: unknown) => Number(value) || 0;
+const rupeesToLacs = (value: unknown) => number(value) / 100000;
 const money = (value: unknown) => `₹${number(value).toFixed(2)}L`;
 
 const TargetArchieViewAllScreen = ({ navigation }: any) => {
@@ -120,13 +121,23 @@ const TargetArchieViewAllScreen = ({ navigation }: any) => {
             designation: user.designation || '-',
             working_days: number(user.working_days),
             total_working_days: number(user.total_working_days),
-            total_customers: number(user.total_customers),
-            target_value_lacs: number(user.target_value_lacs),
-            achievement_value_lacs: number(user.achievement_value_lacs),
-            achievement_percent: number(user.achievement_percent),
-            today_sales_value_lacs: number(user.today_sales_value_lacs),
-            visits: number(user.visits),
-            unique_visits: number(user.unique_visits),
+            total_customers: number(user.total_customers ?? user.registered_retailers),
+            // sales-summary currently returns target in lacs as `target`. Keep the
+            // normalized field first so this remains compatible with the newer API.
+            target_value_lacs: number(user.target_value_lacs ?? user.target),
+            achievement_value_lacs: user.achievement_value_lacs != null
+              ? number(user.achievement_value_lacs)
+              : rupeesToLacs(user.month_order_value),
+            achievement_percent: user.achievement_value_lacs != null
+              ? number(user.achievement_percent)
+              : number(user.target) > 0
+                ? (rupeesToLacs(user.month_order_value) / number(user.target)) * 100
+                : 0,
+            today_sales_value_lacs: user.today_sales_value_lacs != null
+              ? number(user.today_sales_value_lacs)
+              : rupeesToLacs(user.today_order_value),
+            visits: number(user.visits ?? user.month_visits),
+            unique_visits: number(user.unique_visits ?? user.month_unique_retailer_visits),
           })),
         }));
         setSections(formatted);

@@ -35,6 +35,7 @@ import SignUpScreen from '../screens/Login/SignUpScreen';
 import AccountPendingScreen from '../screens/Login/AccountPendingScreen';
 import ForceUpdateScreen from '../screens/Login/ForceUpdateScreen';
 import Notifications from '../screens/Notifications';
+import MyProfile from '../screens/MyProfile';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -179,6 +180,10 @@ const Routes = () => {
         <Stack.Screen name='Notifications' component={Notifications} options={{
           headerShown: true,
           title: 'Notifications'
+        }} />
+        <Stack.Screen name='MyProfile' component={MyProfile} options={{
+          headerShown: true,
+          title: 'My Profile'
         }} />
 
 

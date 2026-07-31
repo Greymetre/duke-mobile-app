@@ -32,7 +32,7 @@ import { shadowStyle } from '../../utils/typography';
 import { PermissionsAndroid } from 'react-native';
 import { SCREEN_HEIGHT } from '../../utils/misc';
 import { Dropdown } from 'react-native-element-dropdown';
-import ActionSheet, { ActionSheetRef } from 'react-native-actions-sheet';
+import ActionSheet, { ActionSheetRef, FlatList as ActionSheetFlatList } from 'react-native-actions-sheet';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import useLocationHook from '../../api/hooks/uselocationhook';
 import { startLiveLocationTracking, stopLiveLocationTracking } from '../../services/liveLocationService';
@@ -87,6 +87,8 @@ interface ObjectiveItem {
   label: string;
   value: string;
 }
+
+const isOtherObjective = (value: string) => ['other', 'others'].includes(value.trim().toLowerCase());
 
 const AttendanceScreen: React.FC<{ navigation: any; route: any }> = ({ navigation, route }) => {
   const routeItem: AttendanceItem | undefined | any = route?.params?.item;
@@ -416,11 +418,20 @@ const AttendanceScreen: React.FC<{ navigation: any; route: any }> = ({ navigatio
   // Objectives logic
   // ────────────────────────────────────────────────
   const getAllObjectives = (): ObjectiveItem[] => {
-    const combined = [...objectiveOptions];
+    const combined: ObjectiveItem[] = [];
+    const seen = new Set<string>();
+    const objectiveKey = (value: string) => {
+      const normalized = value.trim().toLowerCase();
+      return normalized === 'other' || normalized === 'others' ? 'others' : normalized;
+    };
+    const addObjective = (item: ObjectiveItem) => {
+      const key = objectiveKey(item.value);
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      combined.push(item);
+    };
 
-    if (!combined.some(item => item.value.trim().toLowerCase() === 'other')) {
-      combined.push({ label: 'Other', value: 'Other' });
-    }
+    objectiveOptions.forEach(addObjective);
 
     if (!tourPlans.length) return combined;
 
@@ -434,11 +445,7 @@ const AttendanceScreen: React.FC<{ navigation: any; route: any }> = ({ navigatio
       .map(s => s.trim())
       .filter(Boolean);
 
-    dynamicList.forEach(obj => {
-      if (!combined.some(item => item.value === obj)) {
-        combined.push({ label: obj, value: obj });
-      }
-    });
+    dynamicList.forEach(obj => addObjective({ label: obj, value: obj }));
 
     return combined;
   };
@@ -449,7 +456,7 @@ const AttendanceScreen: React.FC<{ navigation: any; route: any }> = ({ navigatio
   };
 
   const confirmObjectives = () => {
-    if (tempSelectedObjectives.some(o => o.value === 'Other') && !customObjective.trim()) {
+    if (tempSelectedObjectives.some(o => isOtherObjective(o.value)) && !customObjective.trim()) {
       Toast.show({ type: 'error', text1: 'Please specify the objective' });
       return;
     }
@@ -574,7 +581,7 @@ const AttendanceScreen: React.FC<{ navigation: any; route: any }> = ({ navigatio
 
       formData.append('punchin_latitude', location.latitude.toFixed(6));
       formData.append('punchin_longitude', location.longitude.toFixed(6));
-      formData.append('type', selectedObjectives.map(o => o.value === 'Other' ? customObjective.trim() : o.value).join(', '));
+      formData.append('type', selectedObjectives.map(o => isOtherObjective(o.value) ? customObjective.trim() : o.value).join(', '));
       formData.append('city', selectedCities.map((c) => c.label).join(', ')); // ← comma separated
       formData.append('punchin_summary', 'Followed tour plan');
       console.log(formData, 'formDataformData')
@@ -849,7 +856,7 @@ const AttendanceScreen: React.FC<{ navigation: any; route: any }> = ({ navigatio
                       }}
                     >
                       <AppText size={13} color={colors.blue} family="InterMedium">
-                        {obj.label == "Other" ? customObjective : obj.label}
+                        {isOtherObjective(obj.value) ? customObjective : obj.label}
                       </AppText>
                       <Pressable onPress={() => removeObjective(obj)} hitSlop={10}>
                         <AppText size={17} color={colors.blue} style={{ marginLeft: rw(6) }}>
@@ -1034,10 +1041,13 @@ const AttendanceScreen: React.FC<{ navigation: any; route: any }> = ({ navigatio
           Select Objectives ({tempSelectedObjectives.length})
         </AppText>
 
-        <FlatList
+        <ActionSheetFlatList<ObjectiveItem>
           data={getAllObjectives()}
           keyExtractor={item => item.value}
           style={{ maxHeight: SCREEN_HEIGHT * 0.55 }}
+          nestedScrollEnabled
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator
           renderItem={({ item }) => {
             const isSelected = tempSelectedObjectives.some(s => s.value === item.value);
             return (
@@ -1083,7 +1093,7 @@ const AttendanceScreen: React.FC<{ navigation: any; route: any }> = ({ navigatio
           }
         />
 
-        {tempSelectedObjectives.some(o => o.value === 'Other') && (
+        {tempSelectedObjectives.some(o => isOtherObjective(o.value)) && (
           <View style={{ marginTop: rw(16), marginBottom: rw(8) }}>
             <AppText size={14} color="#555" family="InterMedium" style={{ marginBottom: rw(8) }}>
               Please specify:

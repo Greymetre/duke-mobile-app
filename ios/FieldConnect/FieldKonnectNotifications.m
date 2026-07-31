@@ -13,3 +13,6 @@ RCT_EXTERN_METHOD(showNotification:
                   rejecter:(RCTPromiseRejectBlock)reject)
 
 @end
+
+@interface RCT_EXTERN_MODULE(AppInfo, NSObject)
+@end

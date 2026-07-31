@@ -1,4 +1,4 @@
-import { AddCustomerIcon, AdhocOrderIcon, CustomerVisitIcon, Expenses, LeadIcon, TourPlanIcon } from "../../assets/svgs/HomePageSvgs";
+import { AddCustomerIcon, AdhocOrderIcon, CustomerVisitIcon, Expenses, NewsTileIcon, TourPlanIcon } from "../../assets/svgs/HomePageSvgs";
 import { colors } from "../../utils/Colors";
 
 export const dashboardTiles = [
@@ -39,10 +39,10 @@ export const dashboardTiles = [
   },
   {
     id: "6",
-    title: "Lead",
-    icon: <LeadIcon/>,
+    title: "News",
+    icon: <NewsTileIcon/>,
     bgColor: colors.blue,
-    navigateTo: "AttendanceReport",
+    navigateTo: "News",
   },
 ];
 export const DATA = [

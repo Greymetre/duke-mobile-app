@@ -187,6 +187,15 @@ function LeadIcon(props: any) {
   )
 }
 
+function NewsTileIcon(props: any) {
+  return (
+    <Svg width={64} height={64} viewBox="0 0 64 64" fill="none" {...props}>
+      <Path d="M10 9h35a6 6 0 016 6v5h4a5 5 0 015 5v25a8 8 0 01-8 8H15a9 9 0 01-9-9V13a4 4 0 014-4z" fill="#58CCED" />
+      <Path d="M51 25h4v25a3 3 0 01-6 0V15M16 21h23M16 30h23M16 39h15M16 48h19" stroke="#395299" strokeWidth={4} strokeLinecap="round" />
+    </Svg>
+  )
+}
+
 
 
 function ClockIcon(props: any) {
@@ -1019,7 +1028,7 @@ function OrderIcon(props:any) {
 
 export {
   LogoIcon, VillageIcon, TourPlanIcon, AddCustomerIcon, CustomerVisitIcon, SearchSvgIcon,
-  AdhocOrderIcon, Expenses, LeadIcon, ClockIcon, LocationIcon, ChatIcon, CallIcon,
+  AdhocOrderIcon, Expenses, LeadIcon, NewsTileIcon, ClockIcon, LocationIcon, ChatIcon, CallIcon,
   EyeIcon, CheckIcon, AddToCartIcon, ArrowCardDownIcon, CrossIconCard,
   PlaceOrderIcon,
   WhatsappICon, PhoneICon, EmailIcon, PlusIcon, MinusIcon, UploadIcon, AddCartMiunsIcon,

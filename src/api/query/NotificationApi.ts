@@ -9,6 +9,8 @@ export type AppNotification = {
   read: boolean;
   model: string;
   model_id: number | null;
+  from_date?: string | null;
+  to_date?: string | null;
   delivery_status: string;
   sent_at: string | null;
   created_at: string;

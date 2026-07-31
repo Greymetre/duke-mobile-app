@@ -62,6 +62,7 @@ export type RootStackParamList = {
   TargetArchieViewAllScreen:undefined
   RetailersPerformanceViewAllScreen:undefined
   Notifications: undefined
+  MyProfile: undefined
 };
 
 export type AppTextProps = {
@@ -95,6 +96,7 @@ export type loginParmas ={
   username: any
   password: any
   app_version?: any
+  build_number?: string
   device_name?: any
   device_type?: any
   unique_id?: string

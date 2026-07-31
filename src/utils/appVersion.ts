@@ -1,4 +1,4 @@
-import { NativeModules, Platform } from 'react-native';
+import { NativeModules } from 'react-native';
 import appPackage from '../../package.json';
 
 type AppInfoConstants = {
@@ -13,10 +13,16 @@ const appInfo = NativeModules.AppInfo as AppInfoConstants | undefined;
  * from android/app/build.gradle. The package version is only a development
  * fallback for a JS reload performed before the native app is rebuilt.
  */
-export const ANDROID_APP_VERSION =
-  Platform.OS === 'android' && appInfo?.versionName
+export const APP_VERSION =
+  appInfo?.versionName
     ? String(appInfo.versionName).trim()
     : appPackage.version;
+
+export const APP_BUILD_NUMBER = appInfo?.versionCode !== undefined
+  ? String(appInfo.versionCode).trim()
+  : '0';
+
+export const ANDROID_APP_VERSION = APP_VERSION;
 
 export const compareVersions = (left: unknown, right: unknown): number => {
   const toParts = (version: unknown) =>

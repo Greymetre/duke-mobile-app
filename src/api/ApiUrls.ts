@@ -2,6 +2,7 @@ export const API_ENDPOINT = {
   //auth
   LOGIN: "api/login",
   LOGOUT: "api/logout",
+  SYNC_MOBILE_SESSION: "api/mobile/session/sync",
   SIGNUP: "api/signup",
   GET_STATE_LIST: "api/getStateList",
   GET_BEAT_LIST: "api/getBeatDropdownList",
@@ -15,6 +16,8 @@ export const API_ENDPOINT = {
   GET_PINCODESBYCITY_LIST: "api/getPincodeList",
   GET_NOTIFICATIONS: "api/getNotification",
   READ_NOTIFICATION: "api/notifications/read",
+  GET_PROFILE: "api/getProfile",
+  UPDATE_PROFILE: "api/updateProfile",
 
   //customer 
   MASTER_DISTRIBUTOR_GET: "api/master-distributors?per_page=20",

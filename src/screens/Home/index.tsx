@@ -35,7 +35,7 @@ import TopProductsCard from '../../components/atoms/TopProductsCard'
 import { DashboardAlerts, DashboardHighlights, ZonePerformanceCard } from '../../components/atoms/DashboardInsights'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { startLiveLocationTracking, stopLiveLocationTracking } from '../../services/liveLocationService'
-import { ANDROID_APP_VERSION, compareVersions } from '../../utils/appVersion'
+import { APP_VERSION, compareVersions } from '../../utils/appVersion'
 import NotificationBell from '../../components/NotificationBell'
 
 interface DropdownItem {
@@ -694,10 +694,7 @@ const Home = () => {
       // ======================================
       // CURRENT APP VERSION
       // ======================================
-      const CURRENT_VERSION =
-        Platform.OS === 'ios'
-          ? '1.1'
-          : ANDROID_APP_VERSION;
+      const CURRENT_VERSION = APP_VERSION;
 
       // ======================================
       // SERVER VERSION
@@ -826,15 +823,7 @@ const Home = () => {
                         if (item?.id == 3) {
                           openCustomerTypeSheet('view');
                         }
-                      } else if (item?.id == 6) {
-                        Toast.show({
-                          type: 'info',
-                          text1: 'This feature is coming soon',
-                          position: 'top',
-                        });
-                        return;
-                      }
-                      else {
+                      } else {
                         navigation.navigate(item?.navigateTo)
                       }
 
@@ -875,12 +864,7 @@ const Home = () => {
 
               <View style={styles.mainContainer}>
                 <View style={[styles.row, { justifyContent: 'space-between' }]}>
-                  <View style={[styles.row, { gap: 10 }]}>
-                    <AppText color={colors.black} size={18} family="InterSemiBold">Target VS Achievement</AppText>
-                    <View style={styles.todayContainer}>
-                      <AppText color={colors.blue} family={'InterMedium'} size={11}>YTD</AppText>
-                    </View>
-                  </View>
+                  <AppText color={colors.black} size={18} family="InterSemiBold">Target VS Achievement</AppText>
                   <Pressable onPress={() => navigation.navigate("TargetArchieViewAllScreen")} hitSlop={10}>
                     <AppText color={colors.blue} family={'InterMedium'} size={13}>View All →</AppText>
                   </Pressable>

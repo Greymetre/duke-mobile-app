@@ -53,3 +53,19 @@ class FieldKonnectNotifications: NSObject {
     }
   }
 }
+
+@objc(AppInfo)
+class AppInfo: NSObject {
+  @objc
+  static func requiresMainQueueSetup() -> Bool {
+    false
+  }
+
+  @objc
+  func constantsToExport() -> [AnyHashable: Any] {
+    [
+      "versionName": Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0",
+      "versionCode": Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0",
+    ]
+  }
+}

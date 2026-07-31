@@ -1,8 +1,8 @@
-import { View, Text, ScrollView, Pressable, Image, Alert, ActivityIndicator, Platform } from 'react-native'
+import { View, ScrollView, Pressable, Image, Alert, ActivityIndicator, Platform } from 'react-native'
 import React, { useState } from 'react'
 import { styles } from './styles'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { DocumentsIcon, LogoIcon, LogoutIcon, MspActicityIcon, OrderHistoryIcon, OrderIcon, ProfileIcon, ReportIcon, SunnyIcon, VillageIcon } from '../../assets/svgs/HomePageSvgs'
+import { LogoIcon, SunnyIcon } from '../../assets/svgs/HomePageSvgs'
 import AppText from '../../components/AppText/AppText'
 import LinearGradient from 'react-native-linear-gradient'
 import FastImage from 'react-native-fast-image'
@@ -10,7 +10,7 @@ import { useNavigation } from '@react-navigation/native'
 import { logout, setToken, setUser } from '../../components/redux/slice/AuthSlice'
 import { useDispatch } from 'react-redux'
 import { useAppSelector } from '../../components/redux/Store'
-import { BASE_URL, IMAGE_BASE_URL } from '../../api/AxiosClient'
+import { BASE_URL, resolveMediaUrl } from '../../api/AxiosClient'
 import { colors } from '../../utils/Colors'
 import { BackIcon, UserIcon } from '../../assets/svgs/SvgsFile'
 import axios from 'axios'
@@ -28,6 +28,15 @@ const data = [
   { id: 7, icon: require('../../assets/images/Dummy/danger.png'), name: 'Delete Account' },
 ]
 
+const getDesignation = (user: any) => {
+  const value = user?.designation_name
+    || (typeof user?.designation === 'object'
+      ? user.designation?.designation_name || user.designation?.name
+      : user?.designation);
+
+  return typeof value === 'string' ? value.trim() : '';
+}
+
 const ProfileTab = ({ handleDrawerClose }: any) => {
   const navigation: any = useNavigation()
   const dispatch = useDispatch();
@@ -35,6 +44,8 @@ const ProfileTab = ({ handleDrawerClose }: any) => {
   const { user } = useAppSelector(
     (state) => state.auth
   );
+  const designation = getDesignation(user);
+  const displayName = `${user?.name || 'User'}${designation ? ` - ${designation}` : ''}`;
 
   const handleLogout = async () => {
     setLoading(true);
@@ -147,7 +158,10 @@ const ProfileTab = ({ handleDrawerClose }: any) => {
           </View>
           <LinearGradient style={[styles.profileView, styles.row]} colors={['#395299', 'rgba(56, 143, 205, 0.5)']} locations={[0.5, 1]}>
             <View style={{ height: 101, width: 101, borderRadius: 55, marginLeft: 16, marginBottom: 20, backgroundColor: 'rgba(255,255,255,0.2)', overflow: 'hidden', justifyContent: 'center', alignItems: 'center', }}>
-              <UserIcon />
+              {!user?.profile_image && <UserIcon />}
+              {!!user?.profile_image && (
+                <FastImage source={{ uri: resolveMediaUrl(user.profile_image) }} style={{ height: 101, width: 101, borderRadius: 101, position: 'absolute' }} />
+              )}
               {/* <FastImage source={require('../../assets/images/HomeTabs/profile.png')} style={{ height: 101, width: 101, borderRadius: 101, position: 'absolute' }} /> */}
               {/* {
                 user?.profile_image && (
@@ -158,7 +172,7 @@ const ProfileTab = ({ handleDrawerClose }: any) => {
             </View>
             <View style={{ gap: 5, paddingLeft: 20, marginBottom: 20 }}>
 
-              <AppText size={20} family='InterBold' color='white'>{user?.name}</AppText>
+              <AppText size={20} family='InterBold' color='white'>{displayName}</AppText>
               <AppText size={20} family='InterMedium' color='white'>{user?.mobile}</AppText>
             </View>
 
@@ -168,18 +182,23 @@ const ProfileTab = ({ handleDrawerClose }: any) => {
 
           <View style={{ flex: 1, marginTop: 16, gap: 16, paddingHorizontal: 16 }}>
             {
-              data?.map((item: any, index: number) => {
+              data?.map((item: any) => {
                 if(Platform.OS == "android" && item?.name == "Delete Account"){
                   return null;
                 } 
                 return (
                   <Pressable key={item.id} style={[styles.itemVIew, styles.row]} onPress={async () => {
-                    if (item?.name == "Report") {
+                    if (item?.name == "My Profile") {
+                      handleDrawerClose()
+                      navigation.navigate('MyProfile')
+                    }
+                    else if (item?.name == "Report") {
                       navigation.navigate('Reports')
+                      handleDrawerClose()
                       // navigation.navigate('UserActivityPage')
                       // navigation.navigate('AttendanceReport')
                     }
-                    if (item?.name == "Order History") {
+                    else if (item?.name == "Order History") {
                       navigation.navigate('OrderList')
                       handleDrawerClose()
                     }

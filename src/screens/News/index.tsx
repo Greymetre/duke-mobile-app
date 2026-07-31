@@ -1,17 +1,19 @@
-import React, {useCallback, useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Image,
+  Modal,
   Platform,
   Pressable,
   RefreshControl,
+  ScrollView,
+  SectionList,
   StyleSheet,
   StatusBar,
   TextInput,
   View,
 } from 'react-native';
-import {NavigationProp, ParamListBase, useNavigation} from '@react-navigation/native';
+import {NavigationProp, ParamListBase, useFocusEffect, useNavigation, useRoute} from '@react-navigation/native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import Svg, {Circle, Path} from 'react-native-svg';
 import ReactNativeBlobUtil from 'react-native-blob-util';
@@ -19,6 +21,8 @@ import Toast from 'react-native-toast-message';
 import AppText from '../../components/AppText/AppText';
 import {AppNotification, getNews, markNotificationRead} from '../../api/query/NotificationApi';
 import {colors} from '../../utils/Colors';
+import NotificationRow from '../../components/NotificationRow';
+import {groupNotificationsByDate} from '../../utils/notificationSections';
 
 type Filter = 'all' | 'unread' | 'media';
 
@@ -49,14 +53,17 @@ const DownloadIcon = () => (
   </Svg>
 );
 
-const formatDate = (value: string) => new Date(value).toLocaleDateString('en-IN', {
-  day: '2-digit',
-  month: 'short',
-});
+const CloseIcon = () => (
+  <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+    <Path d="m6 6 12 12M18 6 6 18" stroke="#172451" strokeWidth={2} strokeLinecap="round" />
+  </Svg>
+);
 
 const News = () => {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
+  const route = useRoute<any>();
   const [items, setItems] = useState<AppNotification[]>([]);
+  const [selectedNews, setSelectedNews] = useState<AppNotification | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
@@ -67,6 +74,7 @@ const News = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const sections = useMemo(() => groupNotificationsByDate(items), [items]);
 
   useEffect(() => {
     const timeout = setTimeout(() => setQuery(search), 350);
@@ -94,7 +102,15 @@ const News = () => {
     Promise.all([load(1), loadUnreadCount()]).finally(() => setLoading(false));
   }, [load, loadUnreadCount]);
 
+  useFocusEffect(useCallback(() => {
+    const selectedNotification = route.params?.selectedNotification as AppNotification | undefined;
+    if (!selectedNotification) return;
+    setSelectedNews(selectedNotification);
+    navigation.setParams({selectedNotification: undefined});
+  }, [navigation, route.params?.selectedNotification]));
+
   const openNews = async (item: AppNotification) => {
+    setSelectedNews(item);
     if (item.read) return;
     setItems(current => current.map(value => value.id === item.id ? {...value, read: true} : value));
     setUnreadCount(current => Math.max(0, current - 1));
@@ -147,44 +163,25 @@ const News = () => {
   };
 
   const renderNews = ({item}: {item: AppNotification}) => (
-    <Pressable style={styles.card} onPress={() => openNews(item)}>
-      {!!item.image && (
-        <View style={styles.media}>
-          <Image source={{uri: item.image}} style={styles.mediaImage} resizeMode="cover" />
-          <View style={styles.tag}><AppText size={11} color="#233461" family="InterMedium">News</AppText></View>
-          {!item.read && <View style={styles.unreadDot} />}
-        </View>
-      )}
-      {!item.image && (
-        <View style={styles.textNewsIcon}>
-          <ImagePlaceholder />
-        </View>
-      )}
-      <View style={styles.cardBody}>
-        <AppText size={17} color="#172451" family="InterBold" lineHeight={22}>{item.type}</AppText>
-        <AppText size={14} color="#647093" lineHeight={20} style={styles.description}>{item.data}</AppText>
-        <View style={styles.meta}>
-          <AppText size={12} color="#8A94AF">▣ {formatDate(item.created_at)}</AppText>
-          {!!item.image && <AppText size={12} color="#8A94AF">▧ Media</AppText>}
-          {!!item.image && (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Download news media"
-              hitSlop={10}
-              style={styles.download}
-              onPress={event => {
-                event.stopPropagation();
-                downloadMedia(item);
-              }}>
-              {downloadingId === item.id
-                ? <ActivityIndicator size="small" color={colors.blue} />
-                : <DownloadIcon />}
-            </Pressable>
-          )}
-          {!item.read && !item.image && <View style={styles.inlineUnread} />}
-        </View>
-      </View>
-    </Pressable>
+    <View style={styles.rowSpacing}>
+      <NotificationRow
+        notification={item}
+        onPress={() => openNews(item)}
+        rightAccessory={(
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Read full news"
+            hitSlop={10}
+            style={styles.readMore}
+            onPress={event => {
+              event.stopPropagation();
+              openNews(item);
+            }}>
+            <AppText size={11} color={colors.blue} family="InterSemiBold">Read more</AppText>
+          </Pressable>
+        )}
+      />
+    </View>
   );
 
   return (
@@ -226,11 +223,15 @@ const News = () => {
         {loading ? (
           <View style={styles.center}><ActivityIndicator size="large" color={colors.blue} /></View>
         ) : (
-          <FlatList
-            data={items}
+          <SectionList
+            sections={sections}
             renderItem={renderNews}
             keyExtractor={item => String(item.id)}
             contentContainerStyle={[styles.list, items.length === 0 && styles.emptyList]}
+            stickySectionHeadersEnabled={false}
+            renderSectionHeader={({section}) => (
+              <AppText size={17} color="#172451" family="InterBold" style={styles.sectionTitle}>{section.title}</AppText>
+            )}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => {
               setRefreshing(true);
               try { await Promise.all([load(1), loadUnreadCount()]); } finally { setRefreshing(false); }
@@ -246,6 +247,56 @@ const News = () => {
           />
         )}
       </View>
+      <Modal
+        visible={selectedNews !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedNews(null)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <AppText size={20} color="#172451" family="InterBold" style={styles.modalTitle}>
+                {selectedNews?.type || 'News'}
+              </AppText>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close news"
+                hitSlop={10}
+                style={styles.closeButton}
+                onPress={() => setSelectedNews(null)}>
+                <CloseIcon />
+              </Pressable>
+            </View>
+            <ScrollView contentContainerStyle={styles.modalContent} showsVerticalScrollIndicator={false}>
+              {!!selectedNews?.image && (
+                <Image
+                  source={{uri: selectedNews.image}}
+                  style={styles.modalImage}
+                  resizeMode="contain"
+                />
+              )}
+              <AppText size={15} color="#4E5877" lineHeight={23}>
+                {selectedNews?.data || ''}
+              </AppText>
+            </ScrollView>
+            {!!selectedNews?.image && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Download attachment"
+                style={styles.downloadButton}
+                disabled={downloadingId !== null}
+                onPress={() => selectedNews && downloadMedia(selectedNews)}>
+                {downloadingId === selectedNews.id
+                  ? <ActivityIndicator size="small" color={colors.blue} />
+                  : <DownloadIcon />}
+                <AppText size={14} color={colors.blue} family="InterSemiBold">
+                  Download attachment
+                </AppText>
+              </Pressable>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -261,20 +312,20 @@ const styles = StyleSheet.create({
   filters: {flexDirection: 'row', gap: 10, paddingHorizontal: 22, paddingVertical: 16},
   filter: {height: 40, minWidth: 62, paddingHorizontal: 18, borderRadius: 22, borderWidth: 1, borderColor: '#CAD3EA', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF'},
   activeFilter: {backgroundColor: colors.blue, borderColor: colors.blue},
-  list: {paddingHorizontal: 22, paddingBottom: 125, gap: 14},
+  list: {paddingHorizontal: 22, paddingBottom: 125},
   emptyList: {flexGrow: 1},
+  sectionTitle: {marginTop: 8, marginBottom: 10, marginLeft: 2},
+  rowSpacing: {marginBottom: 14},
   center: {flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10},
-  card: {borderRadius: 16, overflow: 'hidden', backgroundColor: '#FFF'},
-  media: {height: 176, backgroundColor: '#CBD6EE'},
-  mediaImage: {width: '100%', height: '100%'},
-  tag: {position: 'absolute', top: 12, left: 12, borderRadius: 5, backgroundColor: '#E9EEFC', paddingHorizontal: 9, paddingVertical: 4},
-  unreadDot: {position: 'absolute', top: 12, right: 12, width: 11, height: 11, borderRadius: 6, backgroundColor: '#F05257'},
-  textNewsIcon: {marginTop: 16, marginLeft: 16, width: 62, height: 62, borderRadius: 14, backgroundColor: '#E1F5EF', alignItems: 'center', justifyContent: 'center'},
-  cardBody: {padding: 16},
-  description: {marginTop: 5},
-  meta: {flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 13},
-  inlineUnread: {marginLeft: 'auto', width: 9, height: 9, borderRadius: 5, backgroundColor: '#F05257'},
-  download: {marginLeft: 'auto', width: 32, height: 32, alignItems: 'center', justifyContent: 'center'},
+  readMore: {marginLeft: 'auto', minWidth: 66, height: 30, paddingHorizontal: 8, borderRadius: 15, borderWidth: 1, borderColor: '#BFCBE8', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F5F7FD'},
+  modalBackdrop: {flex: 1, justifyContent: 'center', padding: 22, backgroundColor: 'rgba(9, 18, 48, 0.62)'},
+  modalCard: {maxHeight: '82%', overflow: 'hidden', borderRadius: 20, backgroundColor: '#FFF'},
+  modalHeader: {flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: '#E6EAF3'},
+  modalTitle: {minWidth: 0, flex: 1, paddingRight: 12},
+  closeButton: {width: 32, height: 32, alignItems: 'center', justifyContent: 'center'},
+  modalContent: {padding: 20, gap: 18},
+  modalImage: {width: '100%', height: 230, borderRadius: 14, backgroundColor: '#EEF1F7'},
+  downloadButton: {height: 48, marginHorizontal: 20, marginBottom: 20, borderRadius: 12, borderWidth: 1, borderColor: colors.blue, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, backgroundColor: '#F5F7FD'},
 });
 
 export default News;

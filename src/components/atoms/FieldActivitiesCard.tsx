@@ -32,6 +32,7 @@ const readableLabel = (key: string) => key
   .join(' ');
 
 const number = (value: any) => Number(value) || 0;
+const hiddenActivityKeys = new Set(['customer_visit', 'other', 'others']);
 
 const FieldActivitiesCard = ({ data }: any) => {
   const [period, setPeriod] = useState<Period>('today');
@@ -41,7 +42,7 @@ const FieldActivitiesCard = ({ data }: any) => {
   const orderedKeys = [
     ...Object.keys(activityMeta).filter(key => Object.prototype.hasOwnProperty.call(responseActivities, key)),
     ...Object.keys(responseActivities).filter(key => !activityMeta[key]),
-  ];
+  ].filter(key => !hiddenActivityKeys.has(key.toLowerCase()));
   const activities = orderedKeys.map(key => ({
     id: key,
     key,

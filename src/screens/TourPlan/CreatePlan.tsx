@@ -1069,18 +1069,20 @@ const CreatePlan: React.FC = ({ navigation, route }: any) => {
               </TouchableOpacity>
               );
             }}
-            ListFooterComponent={selectedOptions.some(isOtherObjective) ? (
-              <View
-                style={{
-                  marginTop: 12,
-                  padding: 12,
-                  backgroundColor: '#f9f9f9',
-                  borderRadius: 10,
-                  borderWidth: 1,
-                  borderColor: '#eee',
-                }}
-              >
-                <TextInput
+            ListFooterComponent={(
+              <View>
+                {selectedOptions.some(isOtherObjective) ? (
+                  <View
+                    style={{
+                      marginTop: 12,
+                      padding: 12,
+                      backgroundColor: '#f9f9f9',
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: '#eee',
+                    }}
+                  >
+                    <TextInput
                   style={{
                     fontSize: 16,
                     color: '#000',
@@ -1092,27 +1094,33 @@ const CreatePlan: React.FC = ({ navigation, route }: any) => {
                   placeholderTextColor="#999"
                   value={otherText}
                   onChangeText={setOtherText}
+                  onFocus={() => {
+                    setTimeout(() => objectiveListRef.current?.scrollToEnd({ animated: true }), 250);
+                  }}
                   multiline
                   maxLength={120}
-                />
-              </View>
-            ) : null}
-          />
+                    />
+                  </View>
+                ) : null}
 
-          <TouchableOpacity
-            onPress={saveObjective}
-            style={{
-              marginTop: 28,
-              backgroundColor: colors.blue,
-              paddingVertical: 14,
-              borderRadius: 12,
-              alignItems: 'center',
-            }}
-          >
-            <AppText size={16} color="white" family="InterBold">
-              Done
-            </AppText>
-          </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={saveObjective}
+                  style={{
+                    marginTop: 20,
+                    marginBottom: 8,
+                    backgroundColor: colors.blue,
+                    paddingVertical: 14,
+                    borderRadius: 12,
+                    alignItems: 'center',
+                  }}
+                >
+                  <AppText size={16} color="white" family="InterBold">
+                    Done
+                  </AppText>
+                </TouchableOpacity>
+              </View>
+            )}
+          />
         </View>
       </ActionSheet>
     </SafeAreaView>

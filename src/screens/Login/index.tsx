@@ -15,7 +15,7 @@ import ICEye from '../../assets/svgs/eye';
 import Toast from 'react-native-toast-message';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { initializeLiveLocationTracking } from '../../services/liveLocationService';
-import { ANDROID_APP_VERSION } from '../../utils/appVersion';
+import { APP_BUILD_NUMBER, APP_VERSION } from '../../utils/appVersion';
 import { getDeviceName, getUniqueDeviceId } from '../../utils/deviceIdentity';
 import { getFcmToken } from '../../utils/firebaseMessaging';
 
@@ -23,12 +23,6 @@ type LoginFormValues = {
   email: string;
   password: string;
 };
-
-const APP_VERSION =
-  Platform.select({
-    android: ANDROID_APP_VERSION,
-    ios: '2.3',
-  }) || ANDROID_APP_VERSION;
 
 const LoginScreen = ({ navigation }: { navigation: any }) => {
   const dispatch = useDispatch();
@@ -63,6 +57,7 @@ const LoginScreen = ({ navigation }: { navigation: any }) => {
         username: values.email.trim(),
         password: values.password,
         app_version: APP_VERSION,
+        build_number: APP_BUILD_NUMBER,
         device_name: getDeviceName(),
         device_type: Platform.OS,
         unique_id: getUniqueDeviceId(),

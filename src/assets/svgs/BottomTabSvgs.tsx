@@ -137,6 +137,41 @@ function TwoMenIcon(props: any) {
     )
   }
 
+  function NewsletterIcon(props: any) {
+    return (
+      <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" {...props}>
+        <Path d="M5 4.5h11.5A1.5 1.5 0 0118 6v12.5H6.5A2.5 2.5 0 014 16V5.5a1 1 0 011-1z" stroke="#395299" strokeWidth={1.7} strokeLinejoin="round" />
+        <Path d="M18 8h1a1 1 0 011 1v9a1.5 1.5 0 01-3 0V6M7.5 8h7M7.5 11h7M7.5 14h4.5" stroke="#395299" strokeWidth={1.7} strokeLinecap="round" />
+      </Svg>
+    )
+  }
+
+  function ActiveNewsletterIcon(props: any) {
+    return (
+      <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" {...props}>
+        <Path d="M5 3.75h11.5A2.25 2.25 0 0118.75 6v1.25H20A1.75 1.75 0 0121.75 9v9A2.75 2.75 0 0119 20.75H6.5A3.25 3.25 0 013.25 17.5v-12A1.75 1.75 0 015 3.75z" fill="#395299" />
+        <Path d="M18.75 9H20v9a1 1 0 01-2 0V6M7.25 8h7.25M7.25 11h7.25M7.25 14h4.5" stroke="#FFF" strokeWidth={1.5} strokeLinecap="round" />
+      </Svg>
+    )
+  }
+
+  function ReportTabIcon(props: any) {
+    return (
+      <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" {...props}>
+        <Path d="M6 3.5h12a1.5 1.5 0 011.5 1.5v14a1.5 1.5 0 01-1.5 1.5H6A1.5 1.5 0 014.5 19V5A1.5 1.5 0 016 3.5zM8 16v-3m4 3V8m4 8v-5" stroke="#395299" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" />
+      </Svg>
+    )
+  }
+
+  function ActiveReportTabIcon(props: any) {
+    return (
+      <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" {...props}>
+        <Path d="M6 2.75h12A2.25 2.25 0 0120.25 5v14A2.25 2.25 0 0118 21.25H6A2.25 2.25 0 013.75 19V5A2.25 2.25 0 016 2.75z" fill="#395299" />
+        <Path d="M8 16v-3m4 3V8m4 8v-5" stroke="#FFF" strokeWidth={1.7} strokeLinecap="round" />
+      </Svg>
+    )
+  }
+
   function ActiveHomeIcon(props: any) {
     return (
       <Svg
@@ -155,4 +190,4 @@ function TwoMenIcon(props: any) {
     )
   }
 
-export { HomeIcon, TwoMenIcon, TaskIcon, MessageIcon, ActiveTaskIcon, ActiveTwoMenIcon, ActiveHomeIcon, FifthUserIcon }
+export { HomeIcon, TwoMenIcon, TaskIcon, MessageIcon, ActiveTaskIcon, ActiveTwoMenIcon, ActiveHomeIcon, FifthUserIcon, NewsletterIcon, ActiveNewsletterIcon, ReportTabIcon, ActiveReportTabIcon }

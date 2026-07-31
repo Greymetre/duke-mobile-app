@@ -36,6 +36,7 @@ import {
   subscribeToForegroundNotifications,
   subscribeToNotificationPresses,
 } from './src/utils/firebaseMessaging';
+import {subscribeToMobileSessionSync, syncMobileSession} from './src/services/mobileSessionSync';
 ;
 
 
@@ -71,6 +72,8 @@ const App = () => {
     };
   }, []);
 
+  useEffect(() => subscribeToMobileSessionSync(), []);
+
   useEffect(() => {
     if (!loading && navigationRef.isReady() && pendingNotificationNavigationRef.current) {
       const timer = setTimeout(() => {
@@ -84,6 +87,7 @@ const App = () => {
   const initializeAfterRehydrate = () => {
     void runAndroidFirstTimeLiveLocationSetup();
     void initializeLiveLocationTracking();
+    syncMobileSession(true);
   };
 
   const MyTheme = {

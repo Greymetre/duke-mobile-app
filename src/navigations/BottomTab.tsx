@@ -4,12 +4,12 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import CustomHeader from '../components/Header';
 import { SCREEN_WIDTH } from '../utils/misc';
 import { colors } from '../utils/Colors';
-import { ActiveHomeIcon, ActiveTaskIcon, ActiveTwoMenIcon, HomeIcon, MessageIcon, TaskIcon, TwoMenIcon } from '../assets/svgs/BottomTabSvgs';
+import { ActiveHomeIcon, ActiveNewsletterIcon, ActiveReportTabIcon, HomeIcon, MessageIcon, NewsletterIcon, ReportTabIcon } from '../assets/svgs/BottomTabSvgs';
 import AppText from '../components/AppText/AppText';
 import Home from '../screens/Home';
 import OrderList from '../screens/OrderScreen';
 import News from '../screens/News';
-import BeatsScreen from '../screens/BeatScreen';
+import Reports from '../screens/reports';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppSelector } from '../components/redux/Store';
 const Tab = createBottomTabNavigator();
@@ -119,7 +119,7 @@ const BottomTab = () => {
                 gap: 2,
               }}
             >
-              {focused ? <ActiveTwoMenIcon /> : <TwoMenIcon />}
+              {focused ? <ActiveNewsletterIcon /> : <NewsletterIcon />}
               <AppText
                 color={colors.blue}
                 family={focused ? 'InterRegular' : 'InterMedium'}
@@ -131,9 +131,9 @@ const BottomTab = () => {
           ),
         }}
       />
-      <Tab.Screen name='Beats' component={BeatsScreen} options={{
+      <Tab.Screen name='ReportsTab' component={Reports} options={{
         headerShown: true,
-        title: 'Beats',
+        title: 'Reports',
         tabBarIcon: ({ focused }) => (
           <View
             style={{
@@ -147,8 +147,8 @@ const BottomTab = () => {
               gap: 2
             }}
           >
-            {focused ? <ActiveTaskIcon /> : <TaskIcon />}
-            <AppText color={colors.blue} family={focused ? "InterRegular" : 'InterMedium'} size={13}>Beats</AppText>
+            {focused ? <ActiveReportTabIcon /> : <ReportTabIcon />}
+            <AppText color={colors.blue} family={focused ? "InterRegular" : 'InterMedium'} size={13}>Reports</AppText>
           </View>
         ),
       }} />

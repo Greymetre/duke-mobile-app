@@ -1,14 +1,14 @@
-import React, {useCallback, useState} from 'react';
-import {ActivityIndicator, FlatList, Image, Pressable, RefreshControl, StyleSheet, View} from 'react-native';
+import React, {useCallback, useMemo, useState} from 'react';
+import {ActivityIndicator, Pressable, RefreshControl, SectionList, StyleSheet, View} from 'react-native';
 import {NavigationProp, ParamListBase, useFocusEffect, useNavigation} from '@react-navigation/native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import AppText from '../../components/AppText/AppText';
 import {colors} from '../../utils/Colors';
 import {AppNotification, getNotifications, markNotificationRead} from '../../api/query/NotificationApi';
+import NotificationRow from '../../components/NotificationRow';
+import {groupNotificationsByDate} from '../../utils/notificationSections';
 
-const formatDate = (value: string) => new Date(value).toLocaleString('en-IN', {
-  day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-});
+type NotificationFilter = 'all' | 'read' | 'unread';
 
 const Notifications = () => {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
@@ -19,13 +19,16 @@ const Notifications = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [readingId, setReadingId] = useState<number | null>(null);
+  const [filter, setFilter] = useState<NotificationFilter>('all');
+  const sections = useMemo(() => groupNotificationsByDate(items), [items]);
 
   const load = useCallback(async (requestedPage = 1) => {
-    const result = await getNotifications(requestedPage);
+    const read = filter === 'read' ? true : filter === 'unread' ? false : undefined;
+    const result = await getNotifications(requestedPage, 30, read);
     setItems(current => requestedPage === 1 ? result.data : [...current, ...result.data]);
     setPage(result.current_page);
     setLastPage(result.last_page);
-  }, []);
+  }, [filter]);
 
   useFocusEffect(useCallback(() => {
     setLoading(true);
@@ -33,6 +36,13 @@ const Notifications = () => {
   }, [load]));
 
   const navigateFromNotification = (notification: AppNotification) => {
+    if (notification.model?.trim().toLowerCase() === 'general_notification') {
+      navigation.navigate('BottomTab', {
+        screen: 'News',
+        params: {selectedNotification: notification},
+      });
+      return;
+    }
     if (!notification.model || notification.model_id === null || notification.model_id === undefined) {
       navigation.navigate('BottomTab');
       return;
@@ -50,6 +60,16 @@ const Notifications = () => {
       case 'attendance':
         navigation.navigate('AttendanceReport', {attendanceId: id});
         return;
+      case 'leave': {
+        const leaveDates = notification.data?.match(/\d{4}-\d{2}-\d{2}/g) ?? [];
+        navigation.navigate('AttendanceReport', {
+          leaveId: id,
+          reportType: 'leave',
+          startDate: notification.from_date || leaveDates[0] || null,
+          endDate: notification.to_date || leaveDates[1] || leaveDates[0] || null,
+        });
+        return;
+      }
       case 'tour':
       case 'tour_plan':
         navigation.navigate('TourPlanPage', {tourId: id});
@@ -84,10 +104,27 @@ const Notifications = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      <FlatList
-        data={items}
+      <View style={styles.filters}>
+        {(['all', 'read', 'unread'] as NotificationFilter[]).map(value => (
+          <Pressable
+            key={value}
+            accessibilityRole="button"
+            onPress={() => setFilter(value)}
+            style={[styles.filterChip, filter === value && styles.activeFilterChip]}>
+            <AppText
+              size={14}
+              family="InterMedium"
+              color={filter === value ? '#FFF' : colors.blue}>
+              {value === 'all' ? 'All' : value === 'read' ? 'Read' : 'Unread'}
+            </AppText>
+          </Pressable>
+        ))}
+      </View>
+      <SectionList
+        sections={sections}
         keyExtractor={item => String(item.id)}
         contentContainerStyle={[styles.content, items.length === 0 && styles.emptyContent]}
+        stickySectionHeadersEnabled={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => {
           setRefreshing(true);
           try { await load(1); } finally { setRefreshing(false); }
@@ -100,16 +137,17 @@ const Notifications = () => {
         onEndReachedThreshold={0.3}
         ListEmptyComponent={<View style={styles.center}><AppText size={17} family="InterSemiBold" color={colors.blue}>No notifications yet</AppText><AppText size={13} color="#707070">New updates will appear here.</AppText></View>}
         ListFooterComponent={loadingMore ? <ActivityIndicator color={colors.blue} style={styles.footer} /> : null}
+        renderSectionHeader={({section}) => (
+          <AppText size={17} color="#172451" family="InterBold" style={styles.sectionTitle}>{section.title}</AppText>
+        )}
         renderItem={({item}) => (
-          <Pressable onPress={() => handlePress(item)} style={[styles.card, !item.read && styles.unreadCard]}>
-            <View style={styles.cardHeader}>
-              <View style={styles.titleRow}>{!item.read && <View style={styles.unreadDot} />}<AppText size={15} family={item.read ? 'InterMedium' : 'InterBold'} numLines={1} style={styles.title}>{item.type || 'FieldKonnect'}</AppText></View>
-              {readingId === item.id && <ActivityIndicator size="small" color={colors.blue} />}
-            </View>
-            {!!item.image && <Image source={{uri: item.image}} style={styles.notificationImage} resizeMode="cover" />}
-            <AppText size={14} color="#4F4F4F" lineHeight={20}>{item.data}</AppText>
-            <AppText size={11} color="#8A8A8A" style={styles.date}>{formatDate(item.created_at)}</AppText>
-          </Pressable>
+          <View style={styles.rowSpacing}>
+            <NotificationRow
+              notification={item}
+              onPress={() => handlePress(item)}
+              rightAccessory={readingId === item.id ? <ActivityIndicator size="small" color={colors.blue} /> : undefined}
+            />
+          </View>
         )}
       />
     </SafeAreaView>
@@ -118,17 +156,14 @@ const Notifications = () => {
 
 const styles = StyleSheet.create({
   container: {flex: 1, backgroundColor: colors.bgColor},
-  content: {padding: 16, gap: 12},
+  filters: {flexDirection: 'row', gap: 10, paddingHorizontal: 12, paddingTop: 14, paddingBottom: 2},
+  filterChip: {height: 40, minWidth: 72, paddingHorizontal: 18, borderRadius: 22, borderWidth: 1, borderColor: '#CAD3EA', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF'},
+  activeFilterChip: {backgroundColor: colors.blue, borderColor: colors.blue},
+  content: {paddingHorizontal: 12, paddingBottom: 12},
   emptyContent: {flexGrow: 1},
+  sectionTitle: {marginTop: 18, marginBottom: 10, marginLeft: 2},
+  rowSpacing: {marginBottom: 10},
   center: {flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.bgColor},
-  card: {padding: 16, borderRadius: 12, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E7E7E7'},
-  unreadCard: {backgroundColor: '#F2F5FF', borderColor: '#C9D3F2'},
-  cardHeader: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7},
-  titleRow: {flex: 1, flexDirection: 'row', alignItems: 'center'},
-  title: {flex: 1},
-  unreadDot: {width: 8, height: 8, borderRadius: 4, backgroundColor: colors.blue, marginRight: 8},
-  notificationImage: {width: '100%', height: 180, borderRadius: 10, marginBottom: 10, backgroundColor: '#EDEDED'},
-  date: {marginTop: 10},
   footer: {paddingVertical: 16},
 });
 
