@@ -32,6 +32,14 @@ export const attendanceData = [
     textColor:"#791f1f",
     image: require('../assets/images/Dummy/exclamation.png')
   },
+  {
+    id: '5',
+    count: 0,
+    label: 'Holiday',
+    color: '#e8f3ff',
+    textColor:"#185fa5",
+    image: require('../assets/images/Dummy/smile.png')
+  },
 ];
 
 

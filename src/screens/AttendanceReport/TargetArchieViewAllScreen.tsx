@@ -21,6 +21,7 @@ import { fonts } from '../../utils/typography';
 
 type Period = 'MTD' | 'YTD';
 type FilterKey = 'zone' | 'designation' | 'user';
+type DateFilterKey = 'months' | 'year' | 'financialYear';
 
 type FilterItem = {
   id?: number | string;
@@ -51,6 +52,15 @@ type SalesSection = {
 
 const API_BASE = 'https://duke.fieldkonnect.in/api';
 const COLUMN_WIDTHS = [220, 180, 180, 120, 130, 170, 160, 90, 160, 110, 140];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const now = new Date();
+const currentYear = now.getFullYear();
+const currentFinancialYearStart = now.getMonth() >= 3 ? currentYear : currentYear - 1;
+const YEAR_OPTIONS = Array.from({ length: 6 }, (_, index) => currentYear - index);
+const FINANCIAL_YEAR_OPTIONS = Array.from(
+  { length: 6 },
+  (_, index) => `${currentFinancialYearStart - index}-${currentFinancialYearStart - index + 1}`,
+);
 
 const number = (value: unknown) => Number(value) || 0;
 const rupeesToLacs = (value: unknown) => number(value) / 100000;
@@ -61,6 +71,11 @@ const TargetArchieViewAllScreen = ({ navigation }: any) => {
   const [sections, setSections] = useState<SalesSection[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeModal, setActiveModal] = useState<FilterKey | null>(null);
+  const [activeDateModal, setActiveDateModal] = useState<DateFilterKey | null>(null);
+  const [selectedMonths, setSelectedMonths] = useState<string[]>([MONTHS[now.getMonth()]]);
+  const [draftMonths, setDraftMonths] = useState<string[]>([MONTHS[now.getMonth()]]);
+  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [selectedFinancialYear, setSelectedFinancialYear] = useState(FINANCIAL_YEAR_OPTIONS[0]);
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState({
     zone: '',
@@ -98,6 +113,12 @@ const TargetArchieViewAllScreen = ({ navigation }: any) => {
     const fetchSalesSummary = async () => {
       const token = store.getState()?.auth?.token;
       const params = [`period=${period.toLowerCase()}`];
+      if (period === 'MTD') {
+        selectedMonths.forEach(month => params.push(`months[]=${month}`));
+        params.push(`year=${selectedYear}`);
+      } else {
+        params.push(`financial_year=${encodeURIComponent(selectedFinancialYear)}`);
+      }
       if (filters.zone) params.push(`zone=${encodeURIComponent(filters.zone)}`);
       if (filters.designation) {
         params.push(`designation=${encodeURIComponent(filters.designation)}`);
@@ -149,7 +170,7 @@ const TargetArchieViewAllScreen = ({ navigation }: any) => {
       }
     };
     fetchSalesSummary();
-  }, [filters, period]);
+  }, [filters, period, selectedFinancialYear, selectedMonths, selectedYear]);
 
   const filterLabel = (item: FilterItem | string) => {
     if (typeof item === 'string') return item;
@@ -168,6 +189,15 @@ const TargetArchieViewAllScreen = ({ navigation }: any) => {
       [activeModal as FilterKey]: activeModal === 'user' ? item.id ?? null : label,
     }));
     setActiveModal(null);
+  };
+
+  const toggleMonth = (month: string) => {
+    setDraftMonths(current => {
+      if (current.includes(month)) {
+        return current.length === 1 ? current : current.filter(item => item !== month);
+      }
+      return MONTHS.filter(item => [...current, month].includes(item));
+    });
   };
 
   const callReportingHead = (reporting: SalesRow['reporting']) => {
@@ -257,6 +287,32 @@ const TargetArchieViewAllScreen = ({ navigation }: any) => {
         ))}
       </View>
 
+      <View style={styles.dateFilters}>
+        {period === 'MTD' ? (
+          <>
+            <DateFilterButton
+              label="Month"
+              value={selectedMonths.join(', ')}
+              onPress={() => {
+                setDraftMonths(selectedMonths);
+                setActiveDateModal('months');
+              }}
+            />
+            <DateFilterButton
+              label="Year"
+              value={String(selectedYear)}
+              onPress={() => setActiveDateModal('year')}
+            />
+          </>
+        ) : (
+          <DateFilterButton
+            label="Financial Year"
+            value={selectedFinancialYear}
+            onPress={() => setActiveDateModal('financialYear')}
+          />
+        )}
+      </View>
+
       <ScrollView horizontal showsHorizontalScrollIndicator>
         <View>
           {renderCells(headers.map(header => (
@@ -323,6 +379,60 @@ const TargetArchieViewAllScreen = ({ navigation }: any) => {
           </View>
         </View>
       </Modal>
+
+      <Modal visible={activeDateModal != null} transparent animationType="slide" statusBarTranslucent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <AppText size={18} family="InterBold">
+                Select {activeDateModal === 'financialYear' ? 'Financial Year' : activeDateModal === 'months' ? 'Months' : 'Year'}
+              </AppText>
+              <Pressable onPress={() => setActiveDateModal(null)}><AppText size={18}>✕</AppText></Pressable>
+            </View>
+            <ScrollView>
+              {activeDateModal === 'months' && MONTHS.map(month => {
+                const selected = draftMonths.includes(month);
+                return (
+                  <Pressable key={month} style={styles.modalRow} onPress={() => toggleMonth(month)}>
+                    <Text style={styles.modalText}>{month}</Text>
+                    <Text style={[styles.checkmark, selected && styles.selectedCheckmark]}>{selected ? '✓' : ''}</Text>
+                  </Pressable>
+                );
+              })}
+              {activeDateModal === 'year' && YEAR_OPTIONS.map(year => (
+                <Pressable key={year} style={styles.modalRow} onPress={() => {
+                  setSelectedYear(year);
+                  setActiveDateModal(null);
+                }}>
+                  <Text style={styles.modalText}>{year}</Text>
+                  <Text style={[styles.checkmark, selectedYear === year && styles.selectedCheckmark]}>
+                    {selectedYear === year ? '✓' : ''}
+                  </Text>
+                </Pressable>
+              ))}
+              {activeDateModal === 'financialYear' && FINANCIAL_YEAR_OPTIONS.map(financialYear => (
+                <Pressable key={financialYear} style={styles.modalRow} onPress={() => {
+                  setSelectedFinancialYear(financialYear);
+                  setActiveDateModal(null);
+                }}>
+                  <Text style={styles.modalText}>{financialYear}</Text>
+                  <Text style={[styles.checkmark, selectedFinancialYear === financialYear && styles.selectedCheckmark]}>
+                    {selectedFinancialYear === financialYear ? '✓' : ''}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+            {activeDateModal === 'months' ? (
+              <Pressable style={styles.doneButton} onPress={() => {
+                setSelectedMonths(draftMonths);
+                setActiveDateModal(null);
+              }}>
+                <AppText size={14} family="InterBold" color="#fff">Apply</AppText>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -330,6 +440,16 @@ const TargetArchieViewAllScreen = ({ navigation }: any) => {
 const FilterChip = ({ label, onRemove }: { label: string; onRemove: () => void }) => (
   <Pressable style={styles.chip} onPress={onRemove}>
     <AppText size={12}>{label} ✕</AppText>
+  </Pressable>
+);
+
+const DateFilterButton = ({ label, value, onPress }: { label: string; value: string; onPress: () => void }) => (
+  <Pressable style={styles.dateFilterButton} onPress={onPress}>
+    <View style={styles.dateFilterText}>
+      <AppText size={11} color="#8990a5">{label}</AppText>
+      <AppText size={13} family="InterSemiBold" color="#25283a">{value}</AppText>
+    </View>
+    <Image source={require('../../assets/images/Dummy/downarrow.png')} style={styles.downArrow} />
   </Pressable>
 );
 
@@ -344,9 +464,14 @@ const styles = StyleSheet.create({
   downArrow: { width: 12, height: 7, resizeMode: 'contain' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 16, paddingTop: 8, gap: 6 },
   chip: { backgroundColor: '#e8eaf7', borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5 },
-  periodTabs: { flexDirection: 'row', margin: 16, backgroundColor: '#eef0f7', borderRadius: 22, padding: 3 },
+  periodTabs: { flexDirection: 'row', marginHorizontal: 16, marginTop: 16, backgroundColor: '#eef0f7', borderRadius: 22, padding: 3 },
   periodTab: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 20 },
   activePeriodTab: { backgroundColor: colors.blue },
+  dateFilters: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 12, gap: 10 },
+  dateFilterButton: { flex: 1, minHeight: 52, flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', backgroundColor: '#fff', borderWidth: 1, borderColor: '#e4e6ee',
+    borderRadius: 12, paddingHorizontal: 14 },
+  dateFilterText: { flex: 1, gap: 2 },
   tableRow: { flexDirection: 'row', minHeight: 48, backgroundColor: '#fff', borderBottomWidth: 1,
     borderBottomColor: '#eceef4' },
   tableHeader: { minHeight: 52, backgroundColor: colors.blue },
@@ -363,8 +488,13 @@ const styles = StyleSheet.create({
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14 },
   searchInput: { borderWidth: 1, borderColor: '#ddd', borderRadius: 9, paddingHorizontal: 12,
     paddingVertical: 10, color: '#111', fontFamily: fonts.InterRegular, marginBottom: 10 },
-  modalRow: { paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#eee' },
+  modalRow: { minHeight: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#eee' },
   modalText: { color: '#222', fontFamily: fonts.InterRegular },
+  checkmark: { width: 24, textAlign: 'center', color: '#fff', fontFamily: fonts.InterBold },
+  selectedCheckmark: { color: colors.blue },
+  doneButton: { marginTop: 14, backgroundColor: colors.blue, borderRadius: 10, paddingVertical: 13,
+    alignItems: 'center' },
 });
 
 export default TargetArchieViewAllScreen;

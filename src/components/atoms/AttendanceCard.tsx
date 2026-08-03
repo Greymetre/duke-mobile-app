@@ -19,16 +19,18 @@ interface AttendanceCardProps {
   onPress?: (item: AttendanceItem) => void;
 }
 
-const AttendanceCard: React.FC<AttendanceCardProps> = ({ item, onPress, data, index }) => {
+const AttendanceCard: React.FC<AttendanceCardProps> = ({ item, onPress, data }) => {
   let count = 0;
-  if(index === 0){
+  if(item.id === '1'){
     count = data?.total_users ?? ((data?.asr?.total || 0) + (data?.dsr?.total || 0));
-  } else if(index === 1){
+  } else if(item.id === '2'){
     count = data?.total_punch_in ?? Math.max(0, (data?.asr?.checked_in_today || 0) + (data?.dsr?.checked_in_today || 0) - (data?.leave_asr_today || 0) - (data?.leave_dsr_today || 0));
-  } else if(index === 2){
+  } else if(item.id === '3'){
     count = data?.total_leave_today ?? ((data?.leave_asr_today || 0) + (data?.leave_dsr_today || 0));
-  } else if(index === 3){
+  } else if(item.id === '4'){
     count = data?.total_not_punch_in ?? ((data?.asr?.not_checked_in_today || 0) + (data?.dsr?.not_checked_in_today || 0));
+  } else if(item.id === '5'){
+    count = data?.total_holiday_today ?? 0;
   }
   return (
     <Pressable
@@ -73,7 +75,7 @@ export const stylesss = StyleSheet.create({
     elevation: 8,
     paddingVertical: rw(16),
     alignItems: 'center',
-    width: '23.5%',
+    width: rw(86),
     borderWidth: 2,
     borderColor: "#e6e8eb"
   },

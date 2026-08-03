@@ -37,6 +37,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { startLiveLocationTracking, stopLiveLocationTracking } from '../../services/liveLocationService'
 import { APP_VERSION, compareVersions } from '../../utils/appVersion'
 import NotificationBell from '../../components/NotificationBell'
+import PrimaryShineChip from '../../components/atoms/PrimaryShineChip'
 
 interface DropdownItem {
   label: string;
@@ -846,7 +847,11 @@ const Home = () => {
                 </View>
               </View>
 
-              <View style={{ marginHorizontal: 16, gap: 8, flexDirection: 'row' }}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
+              >
                 {attendanceData.map((item: any, index: number) => (
                   <AttendanceCard
                     key={item.id}
@@ -860,11 +865,14 @@ const Home = () => {
                     }}
                   />
                 ))}
-              </View>
+              </ScrollView>
 
               <View style={styles.mainContainer}>
                 <View style={[styles.row, { justifyContent: 'space-between' }]}>
-                  <AppText color={colors.black} size={18} family="InterSemiBold">Target VS Achievement</AppText>
+                  <View style={[styles.row, { gap: 6, alignItems: 'baseline' }]}>
+                    <AppText color={colors.black} size={18} family="InterSemiBold">Target VS Achievement</AppText>
+                    <PrimaryShineChip />
+                  </View>
                   <Pressable onPress={() => navigation.navigate("TargetArchieViewAllScreen")} hitSlop={10}>
                     <AppText color={colors.blue} family={'InterMedium'} size={13}>View All →</AppText>
                   </Pressable>
@@ -877,6 +885,7 @@ const Home = () => {
               <View style={styles.mainContainer}>
                 <View style={[styles.row, { gap: 10 }]}>
                   <AppText color={colors.black} size={18} family="InterSemiBold">Zone Performance</AppText>
+                  <PrimaryShineChip />
                   <View style={styles.todayContainer}><AppText color={colors.blue} family="InterMedium" size={11}>MTD</AppText></View>
                 </View>
               </View>

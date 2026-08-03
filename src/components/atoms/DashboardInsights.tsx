@@ -3,17 +3,9 @@ import { StyleSheet, View } from 'react-native';
 import AppText from '../AppText/AppText';
 import { rw } from '../../utils/responsive';
 
-type ZoneItem = { zone?: string; name?: string; percentage?: number; percent?: number; pct?: number; achievement_percentage?: number };
+type ZoneItem = { zone?: string; name?: string; target?: number; achievement?: number; percentage?: number; percent?: number; pct?: number; achievement_percentage?: number };
 type HighlightItem = { label?: string; title?: string; description?: string; desc?: string; icon?: string; iconBg?: string };
 type AlertItem = { title?: string; description?: string; desc?: string; severity?: 'high' | 'medium' | 'low'; icon?: string };
-
-const STATIC_ZONES: ZoneItem[] = [
-  { zone: 'West', pct: 59 },
-  { zone: 'East', pct: 55 },
-  { zone: 'North', pct: 52 },
-  { zone: 'South', pct: 51 },
-  { zone: 'Central', pct: 50 },
-];
 
 const STATIC_HIGHLIGHTS: HighlightItem[] = [
   { label: 'Gradation Of The Month', title: 'Ramesh Kumar — Rating 95%', desc: 'Top performer across all zones · MTD', iconBg: '#3fb6e0', icon: '📌' },
@@ -34,10 +26,26 @@ const STATIC_ALERTS: AlertItem[] = [
 ];
 
 export const ZonePerformanceCard = ({ data }: { data: any }) => {
-  const zones: ZoneItem[] = data?.zone_performance_mtd?.length ? data.zone_performance_mtd : data?.zone_performance?.length ? data.zone_performance : STATIC_ZONES;
-  const sorted = [...zones].sort((a, b) =>
+  const zones: ZoneItem[] = data?.zone_performance_mtd || data?.zone_performance || [];
+  const visibleZones = zones.filter(item => {
+    const zoneName = String(item.zone || item.name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    return zoneName !== 'ho' && zoneName !== 'head office';
+  });
+  const sorted = [...visibleZones].sort((a, b) =>
     (b.percentage ?? b.percent ?? b.pct ?? b.achievement_percentage ?? 0) -
     (a.percentage ?? a.percent ?? a.pct ?? a.achievement_percentage ?? 0),
+  );
+
+  if (!sorted.length) {
+    return (
+      <View style={styles.card}>
+        <AppText size={13} color="#6b7280" align="center">No zone performance data available</AppText>
+      </View>
+    );
+  }
+
+  const topPercentage = Number(
+    sorted[0]?.percentage ?? sorted[0]?.percent ?? sorted[0]?.pct ?? sorted[0]?.achievement_percentage ?? 0,
   );
 
   return (
@@ -48,12 +56,13 @@ export const ZonePerformanceCard = ({ data }: { data: any }) => {
             <View style={{ flex: 1 }}>
               <AppText size={11} color="#6b7280" family="InterMedium">Top Performing Zone</AppText>
               <AppText size={14} color="#1f2437" family="InterSemiBold">
-                {sorted[0]?.zone || sorted[0]?.name} Zone — {sorted[0]?.percentage ?? sorted[0]?.percent ?? sorted[0]?.pct ?? sorted[0]?.achievement_percentage ?? 0}% MTD Achievement
+                {sorted[0]?.zone || sorted[0]?.name} Zone — {Math.round(topPercentage)}% MTD Achievement
               </AppText>
             </View>
           </View>
           {sorted.map((item, index) => {
-            const value = Math.max(0, Math.min(100, Number(item.percentage ?? item.percent ?? item.pct ?? item.achievement_percentage ?? 0)));
+            const percentage = Math.max(0, Number(item.percentage ?? item.percent ?? item.pct ?? item.achievement_percentage ?? 0));
+            const barWidth = Math.min(100, percentage);
             return (
               <View key={`${item.zone || item.name}-${index}`} style={styles.zoneRow}>
                 <View style={styles.rowBetween}>
@@ -61,9 +70,9 @@ export const ZonePerformanceCard = ({ data }: { data: any }) => {
                     <View style={[styles.rank, index === 0 && styles.rankTop]}><AppText size={11} color="white" family="InterSemiBold">{index + 1}</AppText></View>
                     <AppText size={13} color="#1f2437" family="InterSemiBold">{item.zone || item.name}</AppText>
                   </View>
-                  <AppText size={13} color={index === 0 ? '#1f8a4c' : '#3b478c'} family="InterSemiBold">{value}%</AppText>
+                  <AppText size={13} color={index === 0 ? '#1f8a4c' : '#3b478c'} family="InterSemiBold">{Math.round(percentage)}%</AppText>
                 </View>
-                <View style={styles.track}><View style={[styles.fill, { width: `${value}%`, backgroundColor: index === 0 ? '#1f8a4c' : '#8b93ff' }]} /></View>
+                <View style={styles.track}><View style={[styles.fill, { width: `${barWidth}%`, backgroundColor: index === 0 ? '#1f8a4c' : '#8b93ff' }]} /></View>
               </View>
             );
           })}
