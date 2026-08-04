@@ -38,6 +38,7 @@ import { startLiveLocationTracking, stopLiveLocationTracking } from '../../servi
 import { APP_VERSION, compareVersions } from '../../utils/appVersion'
 import NotificationBell from '../../components/NotificationBell'
 import PrimaryShineChip from '../../components/atoms/PrimaryShineChip'
+import DealerDistributorPerformanceCard from '../../components/atoms/DealerDistributorPerformanceCard'
 
 interface DropdownItem {
   label: string;
@@ -920,10 +921,23 @@ const Home = () => {
               <View style={styles.mainContainer}>
                 <View style={[styles.row, { gap: 6, alignItems: 'baseline' }]}>
                   <AppText color={colors.black} size={18} family="InterSemiBold">Customer Order</AppText>
-                  <PrimaryShineChip />
                 </View>
               </View>
               <RetailersOverviewCard data={homeData} />
+              <View style={styles.mainContainer}>
+                <View style={[styles.row, { justifyContent: 'space-between' }]}>
+                  <AppText color={colors.black} size={18} family="InterSemiBold">
+                    Dealer/Distributor Performance
+                  </AppText>
+                  <Pressable
+                    onPress={() => navigation.navigate('DealerDistributorPerformanceViewAllScreen')}
+                    hitSlop={10}
+                  >
+                    <AppText color={colors.blue} family="InterMedium" size={13}>View All →</AppText>
+                  </Pressable>
+                </View>
+              </View>
+              <DealerDistributorPerformanceCard data={homeData} />
               <View style={styles.mainContainer}>
                 <AppText color={colors.black} size={18} family="InterSemiBold">Top Performing SKUs</AppText>
               </View>
@@ -933,9 +947,12 @@ const Home = () => {
                   <View style={[styles.row, { gap: 10 }]}>
                     <AppText color={colors.black} size={18} family="InterSemiBold">Promotional Activities</AppText>
                   </View>
-                  {/* <Pressable>
+                  <Pressable
+                    onPress={() => navigation.navigate('PromotionalActivitiesViewAllScreen')}
+                    hitSlop={10}
+                  >
                     <AppText color={colors.blue} family={'InterMedium'} size={13}>View All →</AppText>
-                  </Pressable> */}
+                  </Pressable>
                 </View>
               </View>
               <FieldActivitiesCard data={homeData} />

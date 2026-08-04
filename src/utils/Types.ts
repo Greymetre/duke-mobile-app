@@ -63,6 +63,8 @@ export type RootStackParamList = {
     type?: 'not_punch_in';
   } | undefined
   TargetArchieViewAllScreen:{ zone?: string } | undefined
+  DealerDistributorPerformanceViewAllScreen:undefined
+  PromotionalActivitiesViewAllScreen:undefined
   RetailersPerformanceViewAllScreen:undefined
   Notifications: undefined
   MyProfile: undefined

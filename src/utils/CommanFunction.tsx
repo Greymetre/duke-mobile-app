@@ -11,7 +11,7 @@ export const attendanceData = [
   {
     id: '2',
     count: 90,
-    label: 'Present',
+    label: 'Market',
     color: '#e1f5ee',
     textColor:"#075041",
     image: require('../assets/images/Dummy/check.png')

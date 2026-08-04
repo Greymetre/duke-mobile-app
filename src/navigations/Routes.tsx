@@ -30,6 +30,8 @@ import { useDispatch } from 'react-redux';
 import { setActiveBg } from '../components/redux/slice/AuthSlice';
 import AttendanceViewAllScreen from '../screens/AttendanceReport/AttendanceViewAllScreen';
 import TargetArchieViewAllScreen from '../screens/AttendanceReport/TargetArchieViewAllScreen';
+import DealerDistributorPerformanceViewAllScreen from '../screens/AttendanceReport/DealerDistributorPerformanceViewAllScreen';
+import PromotionalActivitiesViewAllScreen from '../screens/AttendanceReport/PromotionalActivitiesViewAllScreen';
 import RetailersPerformanceViewAllScreen from '../screens/AttendanceReport/RetailersPerformanceViewAllScreen';
 import SignUpScreen from '../screens/Login/SignUpScreen';
 import AccountPendingScreen from '../screens/Login/AccountPendingScreen';
@@ -171,6 +173,16 @@ const Routes = () => {
           options={{
             headerShown: false,
           }} />
+        <Stack.Screen
+          name='DealerDistributorPerformanceViewAllScreen'
+          component={DealerDistributorPerformanceViewAllScreen}
+          options={{
+            headerShown: false,
+          }} />
+        <Stack.Screen
+          name='PromotionalActivitiesViewAllScreen'
+          component={PromotionalActivitiesViewAllScreen}
+          options={{ headerShown: false }} />
         <Stack.Screen
           name='RetailersPerformanceViewAllScreen'
           component={RetailersPerformanceViewAllScreen}

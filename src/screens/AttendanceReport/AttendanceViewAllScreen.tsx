@@ -29,6 +29,7 @@ type RowType = {
   market?: boolean;
   leave?: boolean;
   mispunch?: boolean;
+  holiday?: boolean;
 };
 
 type SectionType = {
@@ -39,6 +40,7 @@ type SectionType = {
     market: number;
     leave: number;
     mispunch: number;
+    holiday: number;
   };
 };
 
@@ -53,7 +55,7 @@ const AttendanceViewAllScreen = ({ navigation, route }: any) => {
   const [filters, setFilters] = useState({
     user: null as number | null,
     zone: initialZone,
-    type: initialType as 'punch_in' | 'not_punch_in' | 'leave' | '',
+    type: initialType as 'punch_in' | 'not_punch_in' | 'leave' | 'holiday' | '',
   });
 
   useEffect(() => {
@@ -164,6 +166,13 @@ const AttendanceViewAllScreen = ({ navigation, route }: any) => {
               resizeMode='contain' />
           )}
         </View>
+
+        <View style={styles.center}>
+          {item.holiday && (
+            <Image source={require('../../assets/images/Dummy/check.png')} style={[styles.icon, { tintColor: '#3a4da0' }]}
+              resizeMode='contain' />
+          )}
+        </View>
       </View>
     )
   };
@@ -183,7 +192,7 @@ const AttendanceViewAllScreen = ({ navigation, route }: any) => {
       case 'zone':
         return filterData.zones;
       case 'type':
-        return ['punch_in', 'not_punch_in', 'leave'];
+        return ['punch_in', 'not_punch_in', 'leave', 'holiday'];
       default:
         return [];
     }
@@ -192,7 +201,13 @@ const AttendanceViewAllScreen = ({ navigation, route }: any) => {
   const getLabel = (item: any) => {
     if (activeModal === 'user') return item?.name || '';
     if (activeModal === 'type')
-      return item === 'punch_in' ? 'Market' : item === 'not_punch_in' ? 'Mis Punch' : 'Leave';
+      return item === 'punch_in'
+        ? 'Market'
+        : item === 'not_punch_in'
+          ? 'Mis Punch'
+          : item === 'holiday'
+            ? 'Holiday'
+            : 'Leave';
     return getFilterName(item);
   };
 
@@ -261,6 +276,7 @@ const AttendanceViewAllScreen = ({ navigation, route }: any) => {
       const market = z.users.filter((u: any) => u.punchin && !u.on_leave).length;
       const leave = z.users.filter((u: any) => u.on_leave).length;
       const mispunch = z.users.filter((u: any) => u.not_punchin).length;
+      const holiday = z.users.filter((u: any) => u.on_holiday).length;
 
       return {
         zone: `${z.zone} zone`,
@@ -271,12 +287,14 @@ const AttendanceViewAllScreen = ({ navigation, route }: any) => {
           market: u.punchin && !u.on_leave,
           leave: u.on_leave,
           mispunch: u.not_punchin,
+          holiday: u.on_holiday,
         })),
         total: {
           employees: z.users.length,
           market,
           leave,
           mispunch,
+          holiday,
         },
       };
     });
@@ -356,7 +374,13 @@ const AttendanceViewAllScreen = ({ navigation, route }: any) => {
             style={styles.selectedChip}
           >
             <Text>
-              {filters.type === 'punch_in' ? 'Market' : filters.type === 'not_punch_in' ? 'Mis Punch' : 'Leave'} ✕
+              {filters.type === 'punch_in'
+                ? 'Market'
+                : filters.type === 'not_punch_in'
+                  ? 'Mis Punch'
+                  : filters.type === 'holiday'
+                    ? 'Holiday'
+                    : 'Leave'} ✕
             </Text>
           </Pressable>
         ) : null}
@@ -404,6 +428,7 @@ const AttendanceViewAllScreen = ({ navigation, route }: any) => {
             <Text style={[styles.th, {}]}>Market</Text>
             <Text style={styles.th}>Leave</Text>
             <Text style={styles.th}>Mis Punch</Text>
+            <Text style={styles.th}>Holiday</Text>
           </View>
 
           <SectionList
@@ -442,6 +467,7 @@ const AttendanceViewAllScreen = ({ navigation, route }: any) => {
                       <AppText style={styles.totalText}>{section.total.market}</AppText>
                       <AppText style={styles.totalText}>{section.total.leave}</AppText>
                       <AppText style={styles.totalText}>{section.total.mispunch}</AppText>
+                      <AppText style={styles.totalText}>{section.total.holiday}</AppText>
                     </View>
                   )
                 }

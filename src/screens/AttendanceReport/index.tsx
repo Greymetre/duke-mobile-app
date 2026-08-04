@@ -9,7 +9,6 @@ import { styles } from '../ExpenseReport/styles'
 import ActionSheet, { ActionSheetRef } from 'react-native-actions-sheet';
 import { useChangeAttendanceStatus, useGetAllAttanceReport, useGetAttendanceData } from '../../api/query/CustomerApi'
 import { useFocusEffect } from '@react-navigation/native'
-import AnimatedSwitch from '../../components/AnimatedSwitch/AnimatedSwitch'
 import { Dropdown } from 'react-native-element-dropdown'
 import CustomerCalendar from '../../components/CustomCalendar/CalendarPopupView'
 import { useAppSelector } from '../../components/redux/Store'
@@ -56,7 +55,7 @@ const AttendanceReport = ({ navigation, route }: any) => {
   const [tempSelectedDesignations, setTempSelectedDesignations] = useState<string[]>([]);
   const [showDesignationModal, setShowDesignationModal] = useState(false);
   const [hasAppliedDefaultDesignations, setHasAppliedDefaultDesignations] = useState(false);
-  const [switchOption, setSwitchOption] = useState(true); // true = Normal (A), false = Leave (L)
+  const [attendanceType, setAttendanceType] = useState<'normal' | 'leave' | 'holiday'>('normal');
   const [showCal, setShowCal] = useState(false);
 
   const [rangeType, setRange] = useState('currentMonth');
@@ -94,7 +93,7 @@ const AttendanceReport = ({ navigation, route }: any) => {
     setPage(1);
     setHasMore(true);
     handleAttendanceList(
-      switchOption ? 'normal' : 'leave',
+      attendanceType,
       selectedUserId,
       selectedStatus,
       normalizedStart,
@@ -253,7 +252,7 @@ const AttendanceReport = ({ navigation, route }: any) => {
         ? new Date((routeEnd || routeStart as Date).getTime())
         : endDate;
 
-      setSwitchOption(!showLeave);
+      setAttendanceType(showLeave ? 'leave' : 'normal');
       if (showLeave && routeStart) {
         selectedStart.setHours(0, 0, 0, 0);
         selectedEnd.setHours(23, 59, 59, 999);
@@ -285,7 +284,7 @@ const AttendanceReport = ({ navigation, route }: any) => {
 
     hasLoadedDefaultFilteredAttendance.current = true;
     handleAttendanceList(
-      switchOption ? 'normal' : 'leave',
+      attendanceType,
       selectedUserId,
       selectedStatus,
       startDate,
@@ -300,7 +299,7 @@ const AttendanceReport = ({ navigation, route }: any) => {
 
 
   const handleAttendanceList = async (
-    type: 'normal' | 'leave' = 'normal',
+    type: 'normal' | 'leave' | 'holiday' = 'normal',
     userId: string | null = null,
     status: string | null = null,
     start?: any,
@@ -454,7 +453,7 @@ const AttendanceReport = ({ navigation, route }: any) => {
     const nextPage = page + 1;
 
     handleAttendanceList(
-      switchOption ? 'normal' : 'leave',
+      attendanceType,
       selectedUserId,
       selectedStatus,
       startDate,
@@ -464,10 +463,11 @@ const AttendanceReport = ({ navigation, route }: any) => {
     );
   };
 
-  // Switch change handler
-  const onSwitchChange = (val: boolean) => {
+  // Attendance type change handler
+  const onTypeChange = (type: 'normal' | 'leave' | 'holiday') => {
 
-    setSwitchOption(val);
+    setAttendanceType(type);
+    if (type === 'holiday') setSelectedStatus(null);
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -475,19 +475,19 @@ const AttendanceReport = ({ navigation, route }: any) => {
     const filterStart = new Date(today.getFullYear(), today.getMonth(), 1);
     filterStart.setHours(0, 0, 0, 0);
 
-    const filterEnd = val
+    const filterEnd = type === 'normal'
       ? new Date(today)
       : new Date(today.getFullYear(), today.getMonth() + 2, 0);
     filterEnd.setHours(23, 59, 59, 999);
 
     setStartDate(filterStart);
     setEndDate(filterEnd);
-    setRange(val ? 'currentMonth' : 'custom');
+    setRange(type === 'normal' ? 'currentMonth' : 'custom');
     setPage(1);
     setHasMore(true);
 
     handleAttendanceList(
-      val ? 'normal' : 'leave',
+      type,
       selectedUserId,
       selectedStatus,
       filterStart,
@@ -508,7 +508,7 @@ const AttendanceReport = ({ navigation, route }: any) => {
     setHasMore(true);
 
     handleAttendanceList(
-      switchOption ? 'normal' : 'leave',
+      attendanceType,
       userId,
       selectedStatus,
       startDate,
@@ -529,7 +529,7 @@ const AttendanceReport = ({ navigation, route }: any) => {
     setHasMore(true);
 
     handleAttendanceList(
-      switchOption ? 'normal' : 'leave',
+      attendanceType,
       selectedUserId,
       statusId,
       startDate,
@@ -546,7 +546,7 @@ const AttendanceReport = ({ navigation, route }: any) => {
     resetAttendanceList();
 
     handleAttendanceList(
-      switchOption ? 'normal' : 'leave',
+      attendanceType,
       null,
       selectedStatus,
       startDate,
@@ -563,7 +563,7 @@ const AttendanceReport = ({ navigation, route }: any) => {
     resetAttendanceList();
 
     handleAttendanceList(
-      switchOption ? 'normal' : 'leave',
+      attendanceType,
       null,
       selectedStatus,
       startDate,
@@ -589,7 +589,7 @@ const AttendanceReport = ({ navigation, route }: any) => {
     setShowDesignationModal(false);
 
     handleAttendanceList(
-      switchOption ? 'normal' : 'leave',
+      attendanceType,
       null,
       selectedStatus,
       startDate,
@@ -611,7 +611,7 @@ const AttendanceReport = ({ navigation, route }: any) => {
     resetAttendanceList();
 
     handleAttendanceList(
-      switchOption ? 'normal' : 'leave',
+      attendanceType,
       null,
       null,
       startDate,
@@ -645,11 +645,13 @@ const AttendanceReport = ({ navigation, route }: any) => {
         item?.working_type === 'Full Day Leave' ||
         item?.working_type === 'First Half Leave' ||
         item?.working_type === 'Second Half Leave';
+      const isHoliday = item?.is_holiday === true;
 
       return (
         <Pressable
           style={[styles.listItem, shadowStyle]}
           onPress={() => {
+            if (isHoliday) return;
             actionSheetRef.current?.show();
             if (item?.hierarchy_level <= 2) {
               setHirarchyLevelCheck(item);
@@ -687,19 +689,19 @@ const AttendanceReport = ({ navigation, route }: any) => {
           >
             <View style={styles.firstPunchIN}>
               <AppText color="#888888" family="InterRegular" size={13}>
-                {isLeave ? 'Leave Date' : 'Punch In'}
+                {isHoliday ? 'Holiday Date' : isLeave ? 'Leave Date' : 'Punch In'}
               </AppText>
               <AppText color="black" family="InterSemiBold" size={14}>
-                {isLeave ? item?.date : item?.punch_in || '-'}
+                {isHoliday || isLeave ? item?.date : item?.punch_in || '-'}
               </AppText>
             </View>
 
             <View style={styles.firstPunchIN}>
               <AppText color="#888888" family="InterRegular" size={13}>
-                {isLeave ? 'Leave Type' : 'Punch Out'}
+                {isHoliday ? 'Holiday' : isLeave ? 'Leave Type' : 'Punch Out'}
               </AppText>
               <AppText color="black" family="InterSemiBold" size={14}>
-                {isLeave ? item?.working_type : item?.punch_out || '-'}
+                {isHoliday || isLeave ? item?.working_type : item?.punch_out || '-'}
               </AppText>
             </View>
 
@@ -709,7 +711,9 @@ const AttendanceReport = ({ navigation, route }: any) => {
               </AppText>
               <AppText
                 color={
-                  item?.status === 'Pending'
+                  item?.status === 'Holiday'
+                    ? colors.blue
+                    : item?.status === 'Pending'
                     ? '#E78422'
                     : item?.status === 'Approve'
                       ? '#1bc804'
@@ -967,12 +971,30 @@ const AttendanceReport = ({ navigation, route }: any) => {
               <CalenderIcon size={16} color={colors.blue} />
             </View>
           </Pressable>
-          <AnimatedSwitch
-            text1="A"
-            text2="L"
-            dataPress={onSwitchChange}
-            initialValue={switchOption}
-          />
+          <View style={localStyles.typeSelector}>
+            {([
+              { label: 'A', value: 'normal' },
+              { label: 'L', value: 'leave' },
+              { label: 'H', value: 'holiday' },
+            ] as const).map(option => (
+              <Pressable
+                key={option.value}
+                onPress={() => onTypeChange(option.value)}
+                style={[
+                  localStyles.typeOption,
+                  attendanceType === option.value && localStyles.typeOptionActive,
+                ]}
+              >
+                <AppText
+                  size={13}
+                  family="InterMedium"
+                  color={attendanceType === option.value ? colors.blue : '#797C86'}
+                >
+                  {option.label}
+                </AppText>
+              </Pressable>
+            ))}
+          </View>
         </View>
 
         <View style={{ height: 20 }} />
@@ -986,7 +1008,7 @@ const AttendanceReport = ({ navigation, route }: any) => {
         ) : attendanceList.length === 0 ? (
           <View style={{ alignItems: 'center', marginTop: 60 }}>
             <AppText size={16} color="#718096" family="InterMedium">
-              No {switchOption ? "attendences" : "leaves"} records found
+              No {attendanceType === 'normal' ? 'attendance' : attendanceType} records found
             </AppText>
           </View>
         ) : (
@@ -1513,7 +1535,7 @@ const AttendanceReport = ({ navigation, route }: any) => {
 
                         // Refresh list
                         handleAttendanceList(
-                          switchOption ? "normal" : "leave",
+                          attendanceType,
                           selectedUserId,
                           selectedStatus,
                           startDate,
@@ -1686,7 +1708,7 @@ const AttendanceReport = ({ navigation, route }: any) => {
 
                         // Refresh list
                         handleAttendanceList(
-                          switchOption ? "normal" : "leave",
+                          attendanceType,
                           selectedUserId,
                           selectedStatus,
                           startDate,
@@ -1722,6 +1744,25 @@ const AttendanceReport = ({ navigation, route }: any) => {
 
 // Local styles for dropdowns (add to your styles file or keep here)
 const localStyles = StyleSheet.create({
+  typeSelector: {
+    width: '40%',
+    height: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(57, 82, 153, 0.09)',
+    borderRadius: 25,
+    padding: 3,
+  },
+  typeOption: {
+    flex: 1,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 22,
+  },
+  typeOptionActive: {
+    backgroundColor: 'white',
+  },
   dropdown: {
     height: 50,
     backgroundColor: 'rgba(57, 82, 153, 0.07)',
