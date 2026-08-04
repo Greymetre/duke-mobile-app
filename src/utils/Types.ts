@@ -38,7 +38,7 @@ export type RootStackParamList = {
     expense_id?: string | number;
     mode?: 'my' | 'approval';
   } | undefined;
-  UserActivityPage:undefined;
+  UserActivityPage:{ zone?: string } | undefined;
   ProductCatalogue:undefined;
   SubmitOrder:undefined;
   AddNewExpense:{
@@ -58,8 +58,11 @@ export type RootStackParamList = {
   Reports:undefined
   OrderListDetails:undefined
   IndividualPage:undefined
-  AttendanceViewAllScreen:undefined
-  TargetArchieViewAllScreen:undefined
+  AttendanceViewAllScreen:{
+    zone?: string;
+    type?: 'not_punch_in';
+  } | undefined
+  TargetArchieViewAllScreen:{ zone?: string } | undefined
   RetailersPerformanceViewAllScreen:undefined
   Notifications: undefined
   MyProfile: undefined

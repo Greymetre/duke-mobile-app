@@ -66,7 +66,8 @@ const number = (value: unknown) => Number(value) || 0;
 const rupeesToLacs = (value: unknown) => number(value) / 100000;
 const money = (value: unknown) => `₹${number(value).toFixed(2)}L`;
 
-const TargetArchieViewAllScreen = ({ navigation }: any) => {
+const TargetArchieViewAllScreen = ({ navigation, route }: any) => {
+  const initialZone = String(route?.params?.zone || '').replace(/\s+zone$/i, '').trim();
   const [period, setPeriod] = useState<Period>('MTD');
   const [sections, setSections] = useState<SalesSection[]>([]);
   const [loading, setLoading] = useState(false);
@@ -78,7 +79,7 @@ const TargetArchieViewAllScreen = ({ navigation }: any) => {
   const [selectedFinancialYear, setSelectedFinancialYear] = useState(FINANCIAL_YEAR_OPTIONS[0]);
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState({
-    zone: '',
+    zone: initialZone,
     designation: '',
     user: null as number | string | null,
   });
@@ -87,6 +88,11 @@ const TargetArchieViewAllScreen = ({ navigation }: any) => {
     designations: FilterItem[];
     users: FilterItem[];
   }>({ zones: [], designations: [], users: [] });
+
+  useEffect(() => {
+    const zone = String(route?.params?.zone || '').replace(/\s+zone$/i, '').trim();
+    if (zone) setFilters(current => ({ ...current, zone }));
+  }, [route?.params?.zone]);
 
   useEffect(() => {
     const fetchFilters = async () => {

@@ -42,7 +42,9 @@ type SectionType = {
   };
 };
 
-const AttendanceViewAllScreen = ({ navigation }: any) => {
+const AttendanceViewAllScreen = ({ navigation, route }: any) => {
+  const initialZone = String(route?.params?.zone || '').replace(/\s+zone$/i, '').trim();
+  const initialType = route?.params?.type === 'not_punch_in' ? 'not_punch_in' : '';
   const [activeFilter, setActiveFilter] = useState('User');
   const [sections, setSections] = useState<SectionType[]>([]);
   const [activeModal, setActiveModal] = useState<
@@ -50,9 +52,21 @@ const AttendanceViewAllScreen = ({ navigation }: any) => {
   >(null);
   const [filters, setFilters] = useState({
     user: null as number | null,
-    zone: '' as string,
-    type: '' as 'punch_in' | 'not_punch_in' | 'leave' | '',
+    zone: initialZone,
+    type: initialType as 'punch_in' | 'not_punch_in' | 'leave' | '',
   });
+
+  useEffect(() => {
+    const zone = String(route?.params?.zone || '').replace(/\s+zone$/i, '').trim();
+    const type = route?.params?.type;
+    if (!zone && !type) return;
+
+    setFilters(current => ({
+      ...current,
+      zone: zone || current.zone,
+      type: type === 'not_punch_in' ? type : current.type,
+    }));
+  }, [route?.params?.zone, route?.params?.type]);
 
   const [filterData, setFilterData] = useState<{ users: any[]; zones: string[] }>({
     users: [],

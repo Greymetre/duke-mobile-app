@@ -60,13 +60,16 @@ interface ActivityItem {
   manager_mobile?: string;
 }
 
-const UserActivityScreen = ({ navigation }: any) => {
+const UserActivityScreen = ({ navigation, route }: any) => {
+  const initialZone = String(route?.params?.zone || '').replace(/\s+zone$/i, '').trim();
   const [users, setUsers] = useState<User[]>([]);
   const [zones, setZones] = useState<FilterOption[]>([]);
   const [branches, setBranches] = useState<FilterOption[]>([]);
   const [activityData, setActivityData] = useState<ActivityItem[]>([]);
 
-  const [selectedZone, setSelectedZone] = useState<FilterOption | null>(null);
+  const [selectedZone, setSelectedZone] = useState<FilterOption | null>(
+    initialZone ? { label: initialZone, value: initialZone, id: null } : null,
+  );
   const [selectedBranch, setSelectedBranch] = useState<FilterOption | null>(null);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [selectedDesignations, setSelectedDesignations] = useState<string[]>([]);
@@ -144,6 +147,23 @@ const UserActivityScreen = ({ navigation }: any) => {
       );
     });
   }, [branches, selectedZone]);
+
+  useEffect(() => {
+    const zoneName = String(route?.params?.zone || '').replace(/\s+zone$/i, '').trim();
+    if (!zoneName) return;
+
+    setSelectedZone(current => {
+      const matchedZone = zones.find(zone => zone.label.toLowerCase() === zoneName.toLowerCase());
+      return matchedZone || (
+        current?.label.toLowerCase() === zoneName.toLowerCase()
+          ? current
+          : { label: zoneName, value: zoneName, id: null }
+      );
+    });
+    setSelectedBranch(null);
+    setSelectedUser(null);
+    setCurrentPage(1);
+  }, [route?.params?.zone, zones]);
 
   // Format date to YYYY-MM-DD
   const formatYYYYMMDD = (date: Date): string => {

@@ -32,7 +32,7 @@ import TargetAchievementCard from '../../components/atoms/TargetAchievementCard'
 import FieldActivitiesCard from '../../components/atoms/FieldActivitiesCard'
 import RetailersOverviewCard from '../../components/atoms/RetailersOverviewCard'
 import TopProductsCard from '../../components/atoms/TopProductsCard'
-import { DashboardAlerts, DashboardHighlights, ZonePerformanceCard } from '../../components/atoms/DashboardInsights'
+import { DashboardAlerts, DashboardHighlights, StatePerformanceCard, ZonePerformanceCard } from '../../components/atoms/DashboardInsights'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { startLiveLocationTracking, stopLiveLocationTracking } from '../../services/liveLocationService'
 import { APP_VERSION, compareVersions } from '../../utils/appVersion'
@@ -72,6 +72,7 @@ const Home = () => {
   const [homeData, setHomeData] = useState<any>(null);
   const [loadingBalances, setLoadingBalances] = useState(false);
   const [homeLoading, setHomeLoading] = useState(false);
+  const [performanceTab, setPerformanceTab] = useState<'zone' | 'state'>('zone');
 
   const [fromDate, setFromDate] = useState(new Date());
   const [toDate, setToDate] = useState(new Date());
@@ -883,15 +884,44 @@ const Home = () => {
                 onViewAllPress={() => console.log('View All pressed')}
               />
               <View style={styles.mainContainer}>
-                <View style={[styles.row, { gap: 10 }]}>
-                  <AppText color={colors.black} size={18} family="InterSemiBold">Zone Performance</AppText>
+                <View style={[styles.row, { gap: 6 }]}>
+                  <AppText color={colors.black} size={18} family="InterSemiBold" style={{ flex: 1 }}>Zone and State Performance</AppText>
                   <PrimaryShineChip />
-                  <View style={styles.todayContainer}><AppText color={colors.blue} family="InterMedium" size={11}>MTD</AppText></View>
+                  <View style={styles.todayContainer}>
+                    <AppText color={colors.blue} family="InterMedium" size={11}>MTD</AppText>
+                  </View>
+                </View>
+                <View style={styles.performanceTabs}>
+                  {(['zone', 'state'] as const).map(tab => {
+                    const selected = performanceTab === tab;
+                    return (
+                      <Pressable
+                        key={tab}
+                        style={[styles.performanceTab, selected && styles.performanceTabActive]}
+                        onPress={() => setPerformanceTab(tab)}
+                      >
+                        <AppText
+                          color={selected ? colors.white : colors.blue}
+                          family="InterSemiBold"
+                          size={13}
+                        >
+                          {tab === 'zone' ? 'Zone' : 'State'}
+                        </AppText>
+                      </Pressable>
+                    );
+                  })}
                 </View>
               </View>
-              <ZonePerformanceCard data={homeData} />
+              {performanceTab === 'zone' ? (
+                <ZonePerformanceCard data={homeData} />
+              ) : (
+                <StatePerformanceCard data={homeData} />
+              )}
               <View style={styles.mainContainer}>
-                <AppText color={colors.black} size={18} family="InterSemiBold">Customer Order</AppText>
+                <View style={[styles.row, { gap: 6, alignItems: 'baseline' }]}>
+                  <AppText color={colors.black} size={18} family="InterSemiBold">Customer Order</AppText>
+                  <PrimaryShineChip />
+                </View>
               </View>
               <RetailersOverviewCard data={homeData} />
               <View style={styles.mainContainer}>
@@ -914,9 +944,30 @@ const Home = () => {
               </View>
               <DashboardHighlights data={homeData} />
               <View style={styles.mainContainer}>
-                <AppText color={colors.black} size={18} family="InterSemiBold">Alerts</AppText>
+                <View style={[styles.row, { gap: 10 }]}>
+                  <AppText color={colors.black} size={18} family="InterSemiBold">Alerts</AppText>
+                  <View style={styles.todayContainer}>
+                    <AppText color={colors.blue} family="InterMedium" size={11}>MTD</AppText>
+                  </View>
+                </View>
               </View>
-              <DashboardAlerts data={homeData} />
+              <DashboardAlerts
+                data={homeData}
+                onAlertPress={(alert) => {
+                  if (alert.destination === 'target') {
+                    navigation.navigate('TargetArchieViewAllScreen', { zone: alert.zone });
+                    return;
+                  }
+                  if (alert.destination === 'user_activity') {
+                    navigation.navigate('UserActivityPage', { zone: alert.zone });
+                    return;
+                  }
+                  navigation.navigate('AttendanceViewAllScreen', {
+                    zone: alert.zone,
+                    type: alert.type,
+                  });
+                }}
+              />
 
               <View style={{ height: 40 }} />
             </SafeAreaView>

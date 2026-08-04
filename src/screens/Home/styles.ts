@@ -105,5 +105,22 @@ export const styles = StyleSheet.create({
         borderRadius:40,
         paddingHorizontal:8,
         paddingVertical:2
-    }
+    },
+    performanceTabs: {
+        flexDirection: 'row',
+        backgroundColor: '#e8eaf2',
+        borderRadius: 12,
+        padding: 4,
+        marginTop: 12,
+    },
+    performanceTab: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 8,
+        borderRadius: 9,
+    },
+    performanceTabActive: {
+        backgroundColor: colors.blue,
+    },
 });
