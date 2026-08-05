@@ -1,5 +1,5 @@
 import { View, Text, ScrollView, FlatList, Pressable, Modal, Alert, ActivityIndicator, TextInput, Linking, Platform, StyleSheet } from 'react-native'
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { rw } from '../../utils/responsive'
 import AppText from '../../components/AppText/AppText'
 import { ArrowDownIcon, CalenderIcon, CrossIcon, EyeballIcon, LOcationIcon, ThreeDotIcon } from '../../assets/svgs/SvgsFile'
@@ -23,6 +23,14 @@ interface FilterOption {
   zone_id?: number | string | null;
 }
 
+type AttendanceStatusKey = 'approved' | 'pending' | 'rejected';
+
+const EMPTY_STATUS_COUNTS: Record<AttendanceStatusKey, number> = {
+  approved: 0,
+  pending: 0,
+  rejected: 0,
+};
+
 const AttendanceReport = ({ navigation, route }: any) => {
   const [loader, setLoader] = useState(false);
   const [loader1, setLoader1] = useState(false);
@@ -38,18 +46,17 @@ const AttendanceReport = ({ navigation, route }: any) => {
     (state) => state.auth
   );
   const remarkInputRef = useRef<TextInput>(null);
+  const statusCountRequestRef = useRef(0);
 
   // Dropdown & filter states
   const [users, setUsers] = useState<any[]>([]);
   const [statuses, setStatuses] = useState<any[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
+  const [statusCounts, setStatusCounts] = useState(EMPTY_STATUS_COUNTS);
   const [zones, setZones] = useState<FilterOption[]>([]);
-  const [branches, setBranches] = useState<FilterOption[]>([]);
   const [selectedZone, setSelectedZone] = useState<FilterOption | null>(null);
-  const [selectedBranch, setSelectedBranch] = useState<FilterOption | null>(null);
   const [isZoneFocus, setIsZoneFocus] = useState(false);
-  const [isBranchFocus, setIsBranchFocus] = useState(false);
   const [designationOptions, setDesignationOptions] = useState<any[]>([]);
   const [selectedDesignations, setSelectedDesignations] = useState<string[]>([]);
   const [tempSelectedDesignations, setTempSelectedDesignations] = useState<string[]>([]);
@@ -140,18 +147,6 @@ const AttendanceReport = ({ navigation, route }: any) => {
     };
   }, []);
 
-  const branchOptions = useMemo(() => {
-    if (!selectedZone) return branches;
-
-    return branches.filter((branch) => {
-      if (!branch.zone && !branch.zone_id) return true;
-      return (
-        branch.zone_id?.toString() === selectedZone.id?.toString() ||
-        branch.zone?.toLowerCase() === selectedZone.label.toLowerCase()
-      );
-    });
-  }, [branches, selectedZone]);
-
   const fetchDesignations = useCallback(async () => {
     if (!token) return;
 
@@ -215,9 +210,8 @@ const AttendanceReport = ({ navigation, route }: any) => {
       const filterData = result?.data || result || {};
 
       setZones((filterData.zones || []).map(formatFilterOption).filter((item: FilterOption) => item.label));
-      setBranches((filterData.branches || []).map(formatFilterOption).filter((item: FilterOption) => item.label));
     } catch (err) {
-      console.error('Failed to fetch zone/branch filters:', err);
+      console.error('Failed to fetch zone filters:', err);
     }
   }, [token, formatFilterOption]);
 
@@ -230,11 +224,131 @@ const AttendanceReport = ({ navigation, route }: any) => {
 
   const getActiveReportFilters = (overrides?: any) => {
     const zone = overrides?.zone !== undefined ? overrides.zone : selectedZone;
-    const branch = overrides?.branch !== undefined ? overrides.branch : selectedBranch;
     const designations = overrides?.designations !== undefined ? overrides.designations : selectedDesignations;
 
-    return { zone, branch, designations };
+    return { zone, designations };
   };
+
+  const getStatusKey = (value: any): AttendanceStatusKey | null => {
+    const name = String(value || '').toLowerCase();
+    if (name.includes('approv')) return 'approved';
+    if (name.includes('pend')) return 'pending';
+    if (name.includes('reject')) return 'rejected';
+    return null;
+  };
+
+  const updateStatusCounts = (responseData: any) => {
+    const next = { ...EMPTY_STATUS_COUNTS };
+    let foundCount = false;
+    const summaries = [
+      responseData?.status_counts,
+      responseData?.status_count,
+      responseData?.attendance_counts,
+      responseData?.counts,
+      responseData?.summary,
+    ];
+
+    const setCount = (key: AttendanceStatusKey | null, value: any) => {
+      const count = Number(value);
+      if (key && Number.isFinite(count)) {
+        next[key] = count;
+        foundCount = true;
+      }
+    };
+
+    summaries.forEach(summary => {
+      if (Array.isArray(summary)) {
+        summary.forEach(item => setCount(
+          getStatusKey(item?.name || item?.status || item?.label),
+          item?.count ?? item?.total ?? item?.value,
+        ));
+      } else if (summary && typeof summary === 'object') {
+        Object.entries(summary).forEach(([key, value]: [string, any]) => {
+          setCount(
+            getStatusKey(key) || getStatusKey(value?.name || value?.status || value?.label),
+            value?.count ?? value?.total ?? value,
+          );
+        });
+      }
+    });
+
+    (responseData?.all_status || []).forEach((item: any) => {
+      setCount(
+        getStatusKey(item?.name || item?.status || item?.label),
+        item?.count ?? item?.total ?? item?.attendance_count,
+      );
+    });
+
+    Object.entries(responseData || {}).forEach(([key, value]) => {
+      if (key.toLowerCase().includes('count')) setCount(getStatusKey(key), value);
+    });
+
+    if (foundCount) setStatusCounts(next);
+  };
+
+  const fetchStatusCounts = async (baseQuery: string, availableStatuses: any[]) => {
+    const requestId = ++statusCountRequestRef.current;
+    const fallbackIds: Record<AttendanceStatusKey, string> = { approved: '1', pending: '0', rejected: '2' };
+    const queryWithoutPaginationOrStatus = baseQuery
+      .replace(/&page=\d+/, '')
+      .replace(/&pageSize=\d+/, '')
+      .replace(/&status=[^&]*/, '');
+
+    try {
+      const entries = await Promise.all(
+        (['approved', 'pending', 'rejected'] as AttendanceStatusKey[]).map(async key => {
+          const option = availableStatuses.find(
+            item => getStatusKey(item?.name || item?.status || item?.label) === key,
+          );
+          const statusId = String(option?.id ?? fallbackIds[key]);
+          const countQuery = `${queryWithoutPaginationOrStatus}&status=${encodeURIComponent(statusId)}&page=1&pageSize=10000`;
+          const response = await mutateGetAllAttendance(countQuery);
+          const data = response?.data || {};
+          const records = Array.isArray(data?.data) ? data.data : [];
+          const serverTotal =
+            data?.total_count ??
+            data?.total ??
+            data?.records_total ??
+            data?.pagination?.total;
+
+          if (Number.isFinite(Number(serverTotal))) {
+            return [key, Number(serverTotal)] as const;
+          }
+
+          const pageCount = Number(data?.page_count ?? data?.pagination?.last_page ?? 1);
+          if (pageCount > 1 && records.length > 0) {
+            const lastPageResponse = await mutateGetAllAttendance(
+              countQuery.replace('&page=1&', `&page=${pageCount}&`),
+            );
+            const lastPageRecords = Array.isArray(lastPageResponse?.data?.data)
+              ? lastPageResponse.data.data
+              : [];
+            return [key, ((pageCount - 1) * records.length) + lastPageRecords.length] as const;
+          }
+
+          return [key, records.length] as const;
+        }),
+      );
+
+      if (requestId === statusCountRequestRef.current) {
+        setStatusCounts(Object.fromEntries(entries) as Record<AttendanceStatusKey, number>);
+      }
+    } catch (error) {
+      console.log('Failed to fetch attendance status counts:', error);
+    }
+  };
+
+  const statusChips = (['approved', 'pending', 'rejected'] as AttendanceStatusKey[]).map(key => {
+    const statusOption = statuses.find(item => getStatusKey(item?.name || item?.status || item?.label) === key);
+    const fallbackIds: Record<AttendanceStatusKey, string> = { approved: '1', pending: '0', rejected: '2' };
+    const labels: Record<AttendanceStatusKey, string> = { approved: 'Approve', pending: 'Pending', rejected: 'Rejected' };
+    return {
+      key,
+      label: labels[key],
+      id: String(statusOption?.id ?? fallbackIds[key]),
+      count: statusCounts[key],
+    };
+  });
 
   useFocusEffect(
     useCallback(() => {
@@ -308,7 +422,6 @@ const AttendanceReport = ({ navigation, route }: any) => {
     loadMore: boolean = false,
     reportFilters?: {
       zone?: FilterOption | null;
-      branch?: FilterOption | null;
       designations?: string[];
     }
   ) => {
@@ -345,14 +458,6 @@ const AttendanceReport = ({ navigation, route }: any) => {
         query += `&zone_id=${encodeURIComponent(String(activeFilters.zone.id))}`;
       }
 
-      if (activeFilters.branch?.label) {
-        query += `&branch=${encodeURIComponent(activeFilters.branch.label)}`;
-      }
-
-      if (activeFilters.branch?.id) {
-        query += `&branch_id=${encodeURIComponent(String(activeFilters.branch.id))}`;
-      }
-
       if (activeFilters.designations?.length > 0) {
         query += `&designation=${encodeURIComponent(activeFilters.designations.join(','))}`;
       }
@@ -373,6 +478,8 @@ const AttendanceReport = ({ navigation, route }: any) => {
 
       if (res?.data?.status === 'success') {
 
+        updateStatusCounts(res.data);
+
         const newData = res?.data?.data || [];
 
         // append data if load more
@@ -392,6 +499,13 @@ const AttendanceReport = ({ navigation, route }: any) => {
             { id: null, name: 'All Statuses' },
             ...res.data.all_status,
           ]);
+        }
+
+        if (!loadMore && type !== 'holiday' && !res?.data?.status_counts) {
+          const availableStatuses = res?.data?.all_status?.length > 0
+            ? res.data.all_status
+            : statuses;
+          void fetchStatusCounts(query, availableStatuses);
         }
 
         // pagination logic
@@ -521,7 +635,9 @@ const AttendanceReport = ({ navigation, route }: any) => {
   // Status dropdown change
   const onStatusChange = (item: any) => {
 
-    const statusId = item?.id ? String(item.id) : null;
+    const statusId = item?.id !== null && item?.id !== undefined && item?.id !== ''
+      ? String(item.id)
+      : null;
 
     setSelectedStatus(statusId);
 
@@ -541,7 +657,6 @@ const AttendanceReport = ({ navigation, route }: any) => {
 
   const onZoneChange = (item: FilterOption) => {
     setSelectedZone(item);
-    setSelectedBranch(null);
     setSelectedUserId(null);
     resetAttendanceList();
 
@@ -553,24 +668,7 @@ const AttendanceReport = ({ navigation, route }: any) => {
       endDate,
       1,
       false,
-      { zone: item, branch: null }
-    );
-  };
-
-  const onBranchChange = (item: FilterOption) => {
-    setSelectedBranch(item);
-    setSelectedUserId(null);
-    resetAttendanceList();
-
-    handleAttendanceList(
-      attendanceType,
-      null,
-      selectedStatus,
-      startDate,
-      endDate,
-      1,
-      false,
-      { branch: item }
+      { zone: item }
     );
   };
 
@@ -604,7 +702,6 @@ const AttendanceReport = ({ navigation, route }: any) => {
     setSelectedUserId(null);
     setSelectedStatus(null);
     setSelectedZone(null);
-    setSelectedBranch(null);
     setTempSelectedDesignations([]);
     setSelectedDesignations([]);
     setShowDesignationModal(false);
@@ -618,7 +715,7 @@ const AttendanceReport = ({ navigation, route }: any) => {
       endDate,
       1,
       false,
-      { zone: null, branch: null, designations: [] }
+      { zone: null, designations: [] }
     );
   };
 
@@ -825,7 +922,7 @@ const AttendanceReport = ({ navigation, route }: any) => {
         <View style={{ marginTop: 16, }}>
           <View style={[styles.row, { justifyContent: 'space-between', marginBottom: 12 }]}>
             <AppText size={15} color="black" family="InterBold">Filters</AppText>
-            {(selectedZone || selectedBranch || selectedUserId || selectedStatus || selectedDesignations.length > 0) && (
+            {(selectedZone || selectedUserId || selectedStatus || selectedDesignations.length > 0) && (
               <Pressable onPress={clearAllFilters} style={localStyles.clearAllButton}>
                 <AppText color="#EF4444" size={13} family="InterMedium">Clear</AppText>
               </Pressable>
@@ -852,35 +949,15 @@ const AttendanceReport = ({ navigation, route }: any) => {
               renderRightIcon={() => <ArrowDownIcon />}
             />
 
-            <Dropdown
-              style={[localStyles.dropdown, shadowStyle, isBranchFocus && { borderColor: colors.blue }]}
-              placeholderStyle={localStyles.placeholderStyle}
-              selectedTextStyle={localStyles.selectedTextStyle}
-              inputSearchStyle={localStyles.inputSearchStyle}
-              data={branchOptions}
-              search
-              maxHeight={320}
-              labelField="label"
-              valueField="value"
-              placeholder="Select Branch"
-              searchPlaceholder="Search branch..."
-              value={selectedBranch?.value}
-              onFocus={() => setIsBranchFocus(true)}
-              onBlur={() => setIsBranchFocus(false)}
-              onChange={onBranchChange}
-              renderRightIcon={() => <ArrowDownIcon />}
-            />
-          </View>
-
-          <View style={{ gap: 8, marginBottom: 12 }}>
             <Pressable
-              style={[localStyles.fullDropdown, shadowStyle, styles.row, { justifyContent: 'space-between' }]}
+              style={[localStyles.dropdown, shadowStyle, styles.row, { justifyContent: 'space-between' }]}
               onPress={() => setShowDesignationModal(true)}
             >
               <AppText
                 color={tempSelectedDesignations.length > 0 ? 'black' : '#718096'}
                 size={14}
                 family="InterRegular"
+                numberOfLines={1}
               >
                 {tempSelectedDesignations.length > 0
                   ? `${tempSelectedDesignations.length} selected`
@@ -888,19 +965,19 @@ const AttendanceReport = ({ navigation, route }: any) => {
               </AppText>
               <ArrowDownIcon />
             </Pressable>
-
-            {tempSelectedDesignations.length > 0 && (
-              <Pressable style={localStyles.chipContainer} onPress={() => setShowDesignationModal(true)}>
-                {designationOptions
-                  .filter(item => tempSelectedDesignations.includes(item.value))
-                  .map(item => (
-                    <View key={item.value} style={localStyles.designationChip}>
-                      <AppText size={13} color="black">{item.label}</AppText>
-                    </View>
-                  ))}
-              </Pressable>
-            )}
           </View>
+
+          {tempSelectedDesignations.length > 0 && (
+            <Pressable style={[localStyles.chipContainer, { marginBottom: 12 }]} onPress={() => setShowDesignationModal(true)}>
+              {designationOptions
+                .filter(item => tempSelectedDesignations.includes(item.value))
+                .map(item => (
+                  <View key={item.value} style={localStyles.designationChip}>
+                    <AppText size={13} color="black">{item.label}</AppText>
+                  </View>
+                ))}
+            </Pressable>
+          )}
 
           <View style={[styles.row, { gap: 13 }]}>
             <Dropdown
@@ -996,6 +1073,43 @@ const AttendanceReport = ({ navigation, route }: any) => {
             ))}
           </View>
         </View>
+
+        {attendanceType !== 'holiday' && (
+          <View style={localStyles.statusChipRow}>
+            {statusChips.map(chip => {
+              const isActive = selectedStatus === chip.id;
+              return (
+                <Pressable
+                  key={chip.key}
+                  onPress={() => onStatusChange({ id: isActive ? null : chip.id })}
+                  style={[
+                    localStyles.statusChip,
+                    chip.key === 'approved' && localStyles.approveStatusChip,
+                    chip.key === 'pending' && localStyles.pendingStatusChip,
+                    chip.key === 'rejected' && localStyles.rejectStatusChip,
+                    isActive && chip.key === 'approved' && localStyles.approveStatusChipActive,
+                    isActive && chip.key === 'pending' && localStyles.pendingStatusChipActive,
+                    isActive && chip.key === 'rejected' && localStyles.rejectStatusChipActive,
+                  ]}
+                >
+                  <AppText
+                    size={13}
+                    family="InterSemiBold"
+                    color={isActive
+                      ? 'white'
+                      : chip.key === 'approved'
+                        ? '#339D4F'
+                        : chip.key === 'pending'
+                          ? '#E78422'
+                          : '#D31111'}
+                  >
+                    {chip.label} ({chip.count})
+                  </AppText>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
 
         <View style={{ height: 20 }} />
 
@@ -1763,6 +1877,43 @@ const localStyles = StyleSheet.create({
   typeOptionActive: {
     backgroundColor: 'white',
   },
+  statusChipRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 14,
+  },
+  statusChip: {
+    flex: 1,
+    minHeight: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#d8dcec',
+    backgroundColor: 'white',
+  },
+  approveStatusChip: {
+    borderColor: '#339D4F',
+    backgroundColor: '#339D4F18',
+  },
+  pendingStatusChip: {
+    borderColor: '#E78422',
+    backgroundColor: '#E7842218',
+  },
+  rejectStatusChip: {
+    borderColor: '#D31111',
+    backgroundColor: '#D3111118',
+  },
+  approveStatusChipActive: {
+    backgroundColor: '#339D4F',
+  },
+  pendingStatusChipActive: {
+    backgroundColor: '#E78422',
+  },
+  rejectStatusChipActive: {
+    backgroundColor: '#D31111',
+  },
   dropdown: {
     height: 50,
     backgroundColor: 'rgba(57, 82, 153, 0.07)',
@@ -1771,14 +1922,6 @@ const localStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e2e8f0',
     flex: 1,
-  },
-  fullDropdown: {
-    height: 50,
-    backgroundColor: 'rgba(57, 82, 153, 0.07)',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
   },
   placeholderStyle: {
     fontSize: 14,

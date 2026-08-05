@@ -36,19 +36,28 @@ const Notifications = () => {
   }, [load]));
 
   const navigateFromNotification = (notification: AppNotification) => {
-    if (notification.model?.trim().toLowerCase() === 'general_notification') {
+    const model = notification.model?.trim().toLowerCase();
+    if (model === 'general_notification') {
       navigation.navigate('BottomTab', {
         screen: 'News',
         params: {selectedNotification: notification},
       });
       return;
     }
-    if (!notification.model || notification.model_id === null || notification.model_id === undefined) {
+    if (model === 'lead' || model === 'leads' || model === 'lead_notification') {
+      if (notification.model_id !== null && notification.model_id !== undefined) {
+        navigation.navigate('LeadDetails', {lead: {id: notification.model_id}});
+      } else {
+        navigation.navigate('LeadKonnect');
+      }
+      return;
+    }
+    if (!model || notification.model_id === null || notification.model_id === undefined) {
       navigation.navigate('BottomTab');
       return;
     }
     const id = notification.model_id;
-    switch (notification.model.trim().toLowerCase()) {
+    switch (model) {
       case 'order':
       case 'order_history':
         navigation.navigate('OrderHistoryDetailsScreen', {orderId: id});

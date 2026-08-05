@@ -14,7 +14,13 @@ import { colors } from '../../utils/Colors';
 import { rw } from '../../utils/responsive';
 import { styles } from './styles';
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
+const formatLocalDate = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+const todayIso = () => formatLocalDate(new Date());
 const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024;
 const ALLOWED_ATTACHMENT_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
 const ALLOWANCE_TYPE = {
@@ -350,7 +356,7 @@ const AddNewExpense = () => {
                   if (Platform.OS !== 'ios') {
                     setShowDatePicker(false);
                   }
-                  if (date) setExpenseDate(date.toISOString().slice(0, 10));
+                  if (date) setExpenseDate(formatLocalDate(date));
                 }}
               />
               {Platform.OS === 'ios' && (

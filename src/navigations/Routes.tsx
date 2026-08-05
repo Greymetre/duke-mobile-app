@@ -38,6 +38,11 @@ import AccountPendingScreen from '../screens/Login/AccountPendingScreen';
 import ForceUpdateScreen from '../screens/Login/ForceUpdateScreen';
 import Notifications from '../screens/Notifications';
 import MyProfile from '../screens/MyProfile';
+import LeadKonnect from '../screens/LeadKonnect/index';
+import CreateLead from '../screens/LeadKonnect/CreateLead';
+import LeadDetails from '../screens/LeadKonnect/LeadDetails';
+import EditLead from '../screens/LeadKonnect/EditLead';
+import TaskList from '../screens/TaskList';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -196,6 +201,26 @@ const Routes = () => {
         <Stack.Screen name='MyProfile' component={MyProfile} options={{
           headerShown: true,
           title: 'My Profile'
+        }} />
+        <Stack.Screen name='LeadKonnect' component={LeadKonnect} options={{
+          headerShown: true,
+          title: 'LeadKonnect'
+        }} />
+        <Stack.Screen name='CreateLead' component={CreateLead} options={{
+          headerShown: true,
+          title: 'Add New Lead'
+        }} />
+        <Stack.Screen name='LeadDetails' component={LeadDetails} options={{
+          headerShown: true,
+          title: 'Lead Details'
+        }} />
+        <Stack.Screen name='EditLead' component={EditLead} options={{
+          headerShown: true,
+          title: 'Edit Lead'
+        }} />
+        <Stack.Screen name='TaskList' component={TaskList} options={{
+          headerShown: true,
+          title: 'Tasks'
         }} />
 
 

@@ -124,6 +124,35 @@ export const styles = StyleSheet.create({
         paddingVertical: 6,
         backgroundColor: 'white',
     },
+    statusChipRow: {
+        flexDirection: 'row',
+        gap: 8,
+        marginTop: -8,
+        marginBottom: 12,
+    },
+    statusChip: {
+        flex: 1,
+        minHeight: 38,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 6,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: '#d8dcec',
+        backgroundColor: 'white',
+    },
+    approveStatusChip: {
+        borderColor: '#339D4F',
+        backgroundColor: '#339D4F18',
+    },
+    pendingStatusChip: {
+        borderColor: '#E78422',
+        backgroundColor: '#E7842218',
+    },
+    rejectStatusChip: {
+        borderColor: '#D31111',
+        backgroundColor: '#D3111118',
+    },
 
     designationChip: {
         backgroundColor: colors.blue + '20',

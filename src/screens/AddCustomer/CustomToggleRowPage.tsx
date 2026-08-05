@@ -18,6 +18,8 @@ interface CustomToggleRowProps {
   value: boolean;
   onValueChange: (newValue: boolean) => void;
   disabled?: boolean;
+  compact?: boolean;
+  plain?: boolean;
 }
 
 const CustomToggleRow = ({
@@ -25,6 +27,8 @@ const CustomToggleRow = ({
   value,
   onValueChange,
   disabled = false,
+  compact = false,
+  plain = false,
 }: CustomToggleRowProps) => {
   const animatedValue = useRef(new Animated.Value(value ? 1 : 0)).current;
 
@@ -60,22 +64,22 @@ const CustomToggleRow = ({
 
   const trackBackground = animatedValue.interpolate({
     inputRange: [0, 1],
-    outputRange: [colors.white, colors.white], // off: grayish, on: green (or your color)
+    outputRange: plain ? ['#E7EBF1', 'rgba(57, 82, 153, 0.25)'] : [colors.white, colors.white],
   });
 
   const thumbBackground = animatedValue.interpolate({
     inputRange: [0, 1],
-    outputRange: ['red', "#39C04E"], // can differ if you want
+    outputRange: plain ? [colors.white, colors.blue] : ['red', "#39C04E"],
   });
 
   return (
-    <View style={styles.toggleRow}>
-      <View style={styles.toggleLabel}>
-        <LocationIcon />
-        <AppText size={14} color={colors.white} family="InterRegular">
-          Geo Tag
+    <View style={[styles.toggleRow, plain && styles.plainToggleRow, compact && styles.compactToggleRow]}>
+      {!compact && <View style={styles.toggleLabel}>
+        {!plain && <LocationIcon color={colors.white} />}
+        <AppText size={14} color={plain ? colors.black : colors.white} family="InterRegular" numLines={1}>
+          {label}
         </AppText>
-      </View>
+      </View>}
 
       <TouchableWithoutFeedback onPress={toggle} disabled={disabled}>
         <View style={styles.switchContainer}>
@@ -124,14 +128,27 @@ const styles = StyleSheet.create({
     backgroundColor:'#39C04E'
   },
   toggleLabel: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  compactToggleRow: {
+    width: SWITCH_WIDTH,
+    height: SWITCH_HEIGHT,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    backgroundColor: 'transparent',
+  },
+  plainToggleRow: {
+    backgroundColor: 'transparent',
+    paddingHorizontal: 0,
   },
   switchContainer: {
     width: SWITCH_WIDTH,
     height: SWITCH_HEIGHT,
     justifyContent: 'center',
+    marginLeft: 10,
   },
   track: {
     width: '100%',

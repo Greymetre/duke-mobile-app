@@ -13,7 +13,7 @@ function LogoIcon(props: any) {
     >
       <Path
         d="M22.648 13.067v9.582H11.324v13.067H0V13.067h22.648zm0-2.614H0V0h22.648v10.453z"
-        fill="#fff"
+        fill={props?.color || "#fff"}
       />
     </Svg>
   )

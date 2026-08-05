@@ -68,6 +68,11 @@ export type RootStackParamList = {
   RetailersPerformanceViewAllScreen:undefined
   Notifications: undefined
   MyProfile: undefined
+  LeadKonnect: undefined
+  CreateLead: undefined
+  LeadDetails: { lead?: any } | undefined
+  EditLead: { lead?: any } | undefined
+  TaskList: undefined
 };
 
 export type AppTextProps = {

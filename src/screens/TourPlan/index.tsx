@@ -1,5 +1,5 @@
 import { View, FlatList, Pressable, ActivityIndicator, TextInput, TouchableWithoutFeedback, Keyboard, Modal, ScrollView } from 'react-native'
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { styles } from './styles'
 import { rw } from '../../utils/responsive'
 import AppText from '../../components/AppText/AppText'
@@ -30,11 +30,8 @@ const TourPlanPage = ({ navigation }: TourPlanPageProps) => {
 
   const [selectedUserName, setSelectedUserName] = useState<string>('Select User');
   const [zones, setZones] = useState<FilterOption[]>([]);
-  const [branches, setBranches] = useState<FilterOption[]>([]);
   const [selectedZone, setSelectedZone] = useState<FilterOption | null>(null);
-  const [selectedBranch, setSelectedBranch] = useState<FilterOption | null>(null);
   const [isZoneFocus, setIsZoneFocus] = useState(false);
-  const [isBranchFocus, setIsBranchFocus] = useState(false);
   const [designationOptions, setDesignationOptions] = useState<any[]>([]);
   const [selectedDesignations, setSelectedDesignations] = useState<string[]>([]);
   const [tempSelectedDesignations, setTempSelectedDesignations] = useState<string[]>([]);
@@ -45,6 +42,7 @@ const TourPlanPage = ({ navigation }: TourPlanPageProps) => {
   const [usersSelect, setUsersSelect] = useState<DropdownUser[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<number | string | null>(null);
   const [userSearchText, setUserSearchText] = useState('');
+  const [statusCounts, setStatusCounts] = useState({ approved: 0, pending: 0, rejected: 0 });
 
   const [page, setPage] = useState<number>(1);
   const [hasMore, setHasMore] = useState<boolean>(true);
@@ -78,18 +76,6 @@ const TourPlanPage = ({ navigation }: TourPlanPageProps) => {
     };
   }, []);
 
-  const branchOptions = useMemo(() => {
-    if (!selectedZone) return branches;
-
-    return branches.filter((branch) => {
-      if (!branch.zone && !branch.zone_id) return true;
-      return (
-        branch.zone_id?.toString() === selectedZone.id?.toString() ||
-        branch.zone?.toLowerCase() === selectedZone.label.toLowerCase()
-      );
-    });
-  }, [branches, selectedZone]);
-
   const getTourUserListUrl = useCallback((pageNum = 1, searchName = '') => {
     const params = new URLSearchParams({
       page: String(pageNum),
@@ -99,12 +85,10 @@ const TourPlanPage = ({ navigation }: TourPlanPageProps) => {
     if (searchName) params.append('search_name', searchName);
     if (selectedZone?.label) params.append('zone', selectedZone.label);
     if (selectedZone?.id) params.append('zone_id', String(selectedZone.id));
-    if (selectedBranch?.label) params.append('branch', selectedBranch.label);
-    if (selectedBranch?.id) params.append('branch_id', String(selectedBranch.id));
     if (selectedDesignations.length > 0) params.append('designation', selectedDesignations.join(','));
 
     return `https://duke.fieldkonnect.in/api/tour/userlist?${params.toString()}`;
-  }, [selectedZone, selectedBranch, selectedDesignations]);
+  }, [selectedZone, selectedDesignations]);
 
   const resetTourUserList = () => {
     setUsers([]);
@@ -120,7 +104,6 @@ const TourPlanPage = ({ navigation }: TourPlanPageProps) => {
 
   const clearAllFilters = () => {
     setSelectedZone(null);
-    setSelectedBranch(null);
     setTempSelectedDesignations([]);
     setSelectedDesignations([]);
     setShowDesignationModal(false);
@@ -197,9 +180,8 @@ const TourPlanPage = ({ navigation }: TourPlanPageProps) => {
       const filterData = result?.data || result || {};
 
       setZones((filterData.zones || []).map(formatFilterOption).filter((item: FilterOption) => item.label));
-      setBranches((filterData.branches || []).map(formatFilterOption).filter((item: FilterOption) => item.label));
     } catch (err) {
-      console.error('Failed to fetch zone/branch filters:', err);
+      console.error('Failed to fetch zone filters:', err);
     }
   }, [token, formatFilterOption]);
 
@@ -231,6 +213,14 @@ const TourPlanPage = ({ navigation }: TourPlanPageProps) => {
       if (!response.ok) throw new Error('Failed to fetch users');
 
       const json = await response.json();
+
+      if (json?.status_counts) {
+        setStatusCounts({
+          approved: Number(json.status_counts.approved || 0),
+          pending: Number(json.status_counts.pending || 0),
+          rejected: Number(json.status_counts.rejected || 0),
+        });
+      }
 
       if (json?.data?.data && Array.isArray(json.data.data)) {
         const newUsers = json.data.data.map((u: any) => ({
@@ -365,7 +355,7 @@ const TourPlanPage = ({ navigation }: TourPlanPageProps) => {
 
             <View style={[styles.row, { justifyContent: 'space-between', marginTop: 16 }]}>
               <AppText size={15} color="black" family="InterBold">Filters</AppText>
-              {(selectedZone || selectedBranch || selectedUserId || selectedDesignations.length > 0) && (
+              {(selectedZone || selectedUserId || selectedDesignations.length > 0) && (
                 <Pressable onPress={clearAllFilters} style={styles.clearAllButton}>
                   <AppText color="#EF4444" size={13} family="InterMedium">Clear</AppText>
                 </Pressable>
@@ -390,65 +380,43 @@ const TourPlanPage = ({ navigation }: TourPlanPageProps) => {
                   onBlur={() => setIsZoneFocus(false)}
                   onChange={(item: FilterOption) => {
                     setSelectedZone(item);
-                    setSelectedBranch(null);
                     resetTourUserList();
                   }}
                   renderRightIcon={() => <ArrowDownIcon />}
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <Dropdown
-                  style={[styles.dateTimeBox, isBranchFocus && { borderColor: colors.blue }]}
-                  placeholderStyle={{ color: '#718096', fontSize: 14 }}
-                  selectedTextStyle={{ color: 'black', fontSize: 14 }}
-                  data={branchOptions}
-                  search
-                  maxHeight={300}
-                  labelField="label"
-                  valueField="value"
-                  placeholder="Select Branch"
-                  searchPlaceholder="Search branch..."
-                  value={selectedBranch?.value}
-                  onFocus={() => setIsBranchFocus(true)}
-                  onBlur={() => setIsBranchFocus(false)}
-                  onChange={(item: FilterOption) => {
-                    setSelectedBranch(item);
-                    resetTourUserList();
-                  }}
-                  renderRightIcon={() => <ArrowDownIcon />}
-                />
+                <Pressable
+                  style={[styles.dateTimeBox, styles.row, { justifyContent: 'space-between' }]}
+                  onPress={() => setShowDesignationModal(true)}
+                >
+                  <AppText
+                    color={tempSelectedDesignations.length > 0 ? 'black' : '#718096'}
+                    size={14}
+                    family="InterRegular"
+                    numberOfLines={1}
+                  >
+                    {tempSelectedDesignations.length > 0
+                      ? `${tempSelectedDesignations.length} selected`
+                      : 'Select Designation'}
+                  </AppText>
+                  <ArrowDownIcon />
+                </Pressable>
               </View>
             </View>
 
 
-            <View style={{ gap: 8, marginTop: 12 }}>
-              <Pressable
-                style={[styles.dateTimeBox, styles.row, { justifyContent: 'space-between' }]}
-                onPress={() => setShowDesignationModal(true)}
-              >
-                <AppText
-                  color={tempSelectedDesignations.length > 0 ? 'black' : '#718096'}
-                  size={14}
-                  family="InterRegular"
-                >
-                  {tempSelectedDesignations.length > 0
-                    ? `${tempSelectedDesignations.length} selected`
-                    : 'Select Designation'}
-                </AppText>
-                <ArrowDownIcon />
+            {tempSelectedDesignations.length > 0 && (
+              <Pressable style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 }} onPress={() => setShowDesignationModal(true)}>
+                {designationOptions
+                  .filter(item => tempSelectedDesignations.includes(item.value))
+                  .map(item => (
+                    <View key={item.value} style={styles.designationChip}>
+                      <AppText size={13} color="black">{item.label}</AppText>
+                    </View>
+                  ))}
               </Pressable>
-              {tempSelectedDesignations.length > 0 && (
-                <Pressable style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }} onPress={() => setShowDesignationModal(true)}>
-                  {designationOptions
-                    .filter(item => tempSelectedDesignations.includes(item.value))
-                    .map(item => (
-                      <View key={item.value} style={styles.designationChip}>
-                        <AppText size={13} color="black">{item.label}</AppText>
-                      </View>
-                    ))}
-                </Pressable>
-              )}
-            </View>
+            )}
 
             <View style={[styles.row, { gap: 10, marginVertical: 20 }]}>
               <Pressable style={[styles.dateTimeBox, styles.row, { justifyContent: 'space-between', flex: 1 }]}
@@ -460,6 +428,23 @@ const TourPlanPage = ({ navigation }: TourPlanPageProps) => {
                 </View>
                 <ArrowDownIcon />
               </Pressable>
+            </View>
+            <View style={styles.statusChipRow}>
+              <View style={[styles.statusChip, styles.approveStatusChip]}>
+                <AppText size={13} family="InterSemiBold" color="#339D4F">
+                  Approve ({statusCounts.approved})
+                </AppText>
+              </View>
+              <View style={[styles.statusChip, styles.pendingStatusChip]}>
+                <AppText size={13} family="InterSemiBold" color="#E78422">
+                  Pending ({statusCounts.pending})
+                </AppText>
+              </View>
+              <View style={[styles.statusChip, styles.rejectStatusChip]}>
+                <AppText size={13} family="InterSemiBold" color="#D31111">
+                  Reject ({statusCounts.rejected})
+                </AppText>
+              </View>
             </View>
             {hasShowDropDown && (
               <>
@@ -690,5 +675,3 @@ const TourPlanPage = ({ navigation }: TourPlanPageProps) => {
 }
 
 export default TourPlanPage
-
-

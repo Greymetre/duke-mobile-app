@@ -2,7 +2,7 @@ import { View, ScrollView, Pressable, Image, Alert, ActivityIndicator, Platform 
 import React, { useState } from 'react'
 import { styles } from './styles'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { LogoIcon, SunnyIcon } from '../../assets/svgs/HomePageSvgs'
+import { LeadIcon, LogoIcon, SunnyIcon } from '../../assets/svgs/HomePageSvgs'
 import AppText from '../../components/AppText/AppText'
 import LinearGradient from 'react-native-linear-gradient'
 import FastImage from 'react-native-fast-image'
@@ -17,9 +17,12 @@ import axios from 'axios'
 import { SCREEN_HEIGHT, SCREEN_WIDTH } from '../../utils/misc'
 import { stopLiveLocationTracking } from '../../services/liveLocationService'
 import { logoutApi } from '../../api/query/AuthAPI'
+import Svg, { Path } from 'react-native-svg'
 
 const data = [
   { id: 1, icon: require('../../assets/images/HomeTabs/myprofile.png'), name: 'My Profile' },
+  { id: 2, name: 'Lead' },
+  { id: 8, name: 'Task' },
   // { id: 2, icon:require('../../assets/images/HomeTabs/orderHistory.png'), name: 'Order History' },
   { id: 3, icon: require('../../assets/images/HomeTabs/report.png'), name: 'Report' },
   // { id: 4, icon: require('../../assets/images/HomeTabs/documents.png'), name: 'Documents' },
@@ -178,9 +181,9 @@ const ProfileTab = ({ handleDrawerClose }: any) => {
 
           </LinearGradient>
         </View>
-        <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
 
-          <View style={{ flex: 1, marginTop: 16, gap: 16, paddingHorizontal: 16 }}>
+          <View style={{ flex: 1, marginTop: 4, gap: 8, paddingHorizontal: 16 }}>
             {
               data?.map((item: any) => {
                 if(Platform.OS == "android" && item?.name == "Delete Account"){
@@ -198,6 +201,14 @@ const ProfileTab = ({ handleDrawerClose }: any) => {
                       // navigation.navigate('UserActivityPage')
                       // navigation.navigate('AttendanceReport')
                     }
+                    else if (item?.name == "Lead") {
+                      navigation.navigate('LeadKonnect')
+                      handleDrawerClose()
+                    }
+                    else if (item?.name == "Task") {
+                      navigation.navigate('TaskList')
+                      handleDrawerClose()
+                    }
                     else if (item?.name == "Order History") {
                       navigation.navigate('OrderList')
                       handleDrawerClose()
@@ -211,13 +222,12 @@ const ProfileTab = ({ handleDrawerClose }: any) => {
 
                   }}>
                     {
-                      item?.name == "Delete Account" ? (
-                        <Image
-                          source={item?.icon}
-                          style={{ height: 20, width: 20 }}
-                          resizeMode='contain'
-                          tintColor={colors.blue}
-                        />
+                      item?.name == "Lead" ? (
+                        <LeadIcon width={20} height={20} />
+                      ) : item?.name == "Task" ? (
+                        <TaskDrawerIcon />
+                      ) : item?.name == "Delete Account" ? (
+                        <DeleteDrawerIcon />
                       ) : (
                         <Image
                           source={item?.icon}
@@ -240,3 +250,16 @@ const ProfileTab = ({ handleDrawerClose }: any) => {
 }
 
 export default ProfileTab
+
+const TaskDrawerIcon = () => (
+  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+    <Path d="M8 4.5h-1.5A2.5 2.5 0 004 7v12a2.5 2.5 0 002.5 2.5h11A2.5 2.5 0 0020 19V7a2.5 2.5 0 00-2.5-2.5H16" stroke="#3895D3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    <Path d="M9 2.5h6a1 1 0 011 1v2H8v-2a1 1 0 011-1zM8 11l1.4 1.4L12 9.8M14 11h3M8 16l1.4 1.4L12 15.8M14 17h3" stroke="#3895D3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+)
+
+const DeleteDrawerIcon = () => (
+  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+    <Path d="M4 7h16M9 7V4h6v3m3 0l-1 14H7L6 7m4 4v6m4-6v6" stroke="#3895D3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+)
