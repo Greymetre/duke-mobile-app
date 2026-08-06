@@ -25,7 +25,7 @@ const data = [
   { id: 8, name: 'Task' },
   // { id: 2, icon:require('../../assets/images/HomeTabs/orderHistory.png'), name: 'Order History' },
   { id: 3, icon: require('../../assets/images/HomeTabs/report.png'), name: 'Report' },
-  // { id: 4, icon: require('../../assets/images/HomeTabs/documents.png'), name: 'Documents' },
+  { id: 4, icon: require('../../assets/images/HomeTabs/documents.png'), name: 'Documents' },
   // { id: 5, icon: require('../../assets/images/HomeTabs/mspactivity.png'), name: 'MSP Activity' },
   { id: 6, icon: require('../../assets/images/HomeTabs/logout.png'), name: 'Logout' },
   { id: 7, icon: require('../../assets/images/Dummy/danger.png'), name: 'Delete Account' },
@@ -200,6 +200,10 @@ const ProfileTab = ({ handleDrawerClose }: any) => {
                       handleDrawerClose()
                       // navigation.navigate('UserActivityPage')
                       // navigation.navigate('AttendanceReport')
+                    }
+                    else if (item?.name == "Documents") {
+                      navigation.navigate('Documents')
+                      handleDrawerClose()
                     }
                     else if (item?.name == "Lead") {
                       navigation.navigate('LeadKonnect')

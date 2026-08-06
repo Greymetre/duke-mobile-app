@@ -185,19 +185,22 @@ const LeadKonnect = ({ navigation }: any) => {
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <View style={styles.listContent}>
         <View style={styles.searchRow}>
           <View style={styles.searchBox}>
             <LeadListIcon type="search" />
             <TextInput value={search} onChangeText={setSearch} placeholder="Search leads" placeholderTextColor="#7A8499" style={styles.searchInput} />
           </View>
+          <Pressable accessibilityRole="button" accessibilityLabel="View opportunities" style={styles.opportunityButton} onPress={() => navigation.navigate('OpportunityList')}>
+            <LeadListIcon type="opportunity" color="white" size={23} />
+          </Pressable>
           <Pressable style={[styles.filterButton, activeFilterCount > 0 && styles.filterButtonActive]} onPress={openFilters}>
             <LeadListIcon type="filter" color="white" />
             {activeFilterCount > 0 && <View style={styles.filterCount}><AppText size={10} color={colors.blue} family="InterBold">{activeFilterCount}</AppText></View>}
           </Pressable>
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.summaryRow}>
+        <ScrollView horizontal style={styles.statusScroll} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.summaryRow}>
           {counts.map(item => (
             <SummaryCard
               key={`${item.id}-${item.display_name}`}
@@ -214,13 +217,14 @@ const LeadKonnect = ({ navigation }: any) => {
           <AppText size={13} color={colors.blue} family="InterSemiBold">{leads.length} leads</AppText>
         </View>
 
-        {loading ? <View style={styles.loadingBox}><ActivityIndicator size="large" color={colors.blue} /></View> : leads.length ? leads.map(item => <LeadCard key={item.id} item={item} navigation={navigation} />) : (
-          <View style={styles.noSearchResults}>
-            <AppText size={15} color="#718096" family="InterMedium">No matching leads</AppText>
-          </View>
-        )}
-        <View style={{ height: 90 }} />
-      </ScrollView>
+        <ScrollView style={styles.leadListScroll} contentContainerStyle={styles.leadListContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          {loading ? <View style={styles.loadingBox}><ActivityIndicator size="large" color={colors.blue} /></View> : leads.length ? leads.map(item => <LeadCard key={item.id} item={item} navigation={navigation} />) : (
+            <View style={styles.noSearchResults}>
+              <AppText size={15} color="#718096" family="InterMedium">No matching leads</AppText>
+            </View>
+          )}
+        </ScrollView>
+      </View>
 
       <Pressable accessibilityRole="button" accessibilityLabel="Create new lead" style={styles.fab} onPress={() => navigation.navigate('CreateLead')}>
         <PlusAddIcon color="white" />
@@ -314,23 +318,15 @@ const ActionButton = ({ icon, onPress, disabled = false }: any) => (
   <Pressable
     style={[
       styles.actionButton,
-      !disabled && { backgroundColor: `${ACTION_COLORS[icon] || colors.blue}12`, borderColor: `${ACTION_COLORS[icon] || colors.blue}38` },
+      !disabled && { backgroundColor: colors.blue + '10', borderColor: colors.blue + '35' },
       disabled && styles.actionButtonDisabled,
     ]}
     onPress={onPress}
     disabled={disabled}
   >
-    <LeadListIcon type={icon} size={19} color={disabled ? '#B7BDCA' : ACTION_COLORS[icon] || colors.blue} />
+    <LeadListIcon type={icon} size={19} color={disabled ? '#B7BDCA' : colors.blue} />
   </Pressable>
 );
-
-const ACTION_COLORS: Record<string, string> = {
-  phone: '#1976D2',
-  email: '#D84A3A',
-  whatsapp: '#1E9B50',
-  location: '#E15B3D',
-  view: colors.blue,
-};
 
 const LeadListIcon = ({ type, size = 21, color = colors.blue }: any) => {
   const common = { stroke: color, strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
@@ -353,13 +349,15 @@ const LeadListIcon = ({ type, size = 21, color = colors.blue }: any) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F4F6FA' },
-  listContent: { padding: 16 },
+  listContent: { flex: 1, padding: 16, paddingBottom: 0 },
   searchRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
   searchBox: { flex: 1, height: 50, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: '#D8DEE9', backgroundColor: 'white' },
   searchInput: { flex: 1, color: '#202432', fontSize: 15, fontFamily: fonts.InterRegular },
   filterButton: { width: 50, height: 50, borderRadius: 12, backgroundColor: colors.blue, alignItems: 'center', justifyContent: 'center' },
+  opportunityButton: { width: 50, height: 50, borderRadius: 12, backgroundColor: colors.blue, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#6076B4' },
   filterButtonActive: { borderWidth: 2, borderColor: '#AFC3FF' },
   filterCount: { position: 'absolute', right: -4, top: -5, minWidth: 20, height: 20, paddingHorizontal: 4, borderRadius: 10, backgroundColor: 'white', borderWidth: 1, borderColor: colors.blue, alignItems: 'center', justifyContent: 'center' },
+  statusScroll: { flexGrow: 0, height: 104 },
   summaryRow: { gap: 10, paddingVertical: 16 },
   summaryCard: { width: 108, minHeight: 72, borderRadius: 14, borderWidth: 1, borderColor: colors.blue + '35', backgroundColor: 'white', alignItems: 'center', justifyContent: 'center', gap: 4 },
   summaryCardActive: { backgroundColor: colors.blue, borderColor: colors.blue },
@@ -375,6 +373,8 @@ const styles = StyleSheet.create({
   actionButton: { width: 42, height: 42, borderRadius: 21, borderWidth: 1, alignItems: 'center', justifyContent: 'center', elevation: 1, shadowColor: '#17203A', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 3 },
   actionButtonDisabled: { opacity: 0.45, backgroundColor: '#F2F4F7', borderColor: '#E1E5EC' },
   sectionTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  leadListScroll: { flex: 1 },
+  leadListContent: { paddingBottom: 100 },
   noSearchResults: { minHeight: 160, borderRadius: 16, backgroundColor: 'white', alignItems: 'center', justifyContent: 'center' },
   loadingBox: { minHeight: 220, alignItems: 'center', justifyContent: 'center' },
   fab: { position: 'absolute', right: 20, bottom: 40, width: 60, height: 60, borderRadius: 30, backgroundColor: colors.blue, alignItems: 'center', justifyContent: 'center', elevation: 6, shadowColor: colors.blue, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8 },

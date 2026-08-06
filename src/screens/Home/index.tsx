@@ -839,9 +839,7 @@ const Home = () => {
                 <View style={[styles.row, { justifyContent: 'space-between' }]}>
                   <View style={[styles.row, { gap: 10 }]}>
                     <AppText color={colors.black} size={18} family="InterSemiBold">Attendance</AppText>
-                    <View style={styles.todayContainer}>
-                      <AppText color={colors.blue} family={'InterMedium'} size={11}>TODAY</AppText>
-                    </View>
+                    <PrimaryShineChip label="TODAY" />
                   </View>
                   <Pressable onPress={() => navigation?.navigate("AttendanceViewAllScreen")} hitSlop={10}>
                     <AppText color={colors.blue} family={'InterMedium'} size={13}>View All →</AppText>

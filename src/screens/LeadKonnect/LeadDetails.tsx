@@ -1,10 +1,10 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Dropdown } from 'react-native-element-dropdown';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
-import { addLeadNoteApi, checkInLeadApi, checkOutLeadApi, createLeadTaskApi, getLeadCheckinsApi, getLeadDetailsApi, getLeadTaskDropdownsApi } from '../../api/query/LeadApi';
+import { addLeadNoteApi, checkInLeadApi, checkOutLeadApi, createLeadOpportunityApi, createLeadTaskApi, getLeadCheckinsApi, getLeadDetailsApi, getLeadOpportunityOptionsApi, getLeadTaskDropdownsApi } from '../../api/query/LeadApi';
 import useLocationHook from '../../api/hooks/uselocationhook';
 import AppText from '../../components/AppText/AppText';
 import { colors } from '../../utils/Colors';
@@ -94,6 +94,16 @@ const LeadDetails = ({ route, navigation }: any) => {
   const [showTaskTimePicker, setShowTaskTimePicker] = useState(false);
   const [taskPickerMode, setTaskPickerMode] = useState<'date' | 'time' | null>(null);
   const [taskPickerValue, setTaskPickerValue] = useState(new Date());
+  const [showOpportunity, setShowOpportunity] = useState(false);
+  const [opportunityForm, setOpportunityForm] = useState({ amount: '', confidence: 50, assignedTo: '' as any, contactId: '' as any, note: '', status: '' as any });
+  const [opportunityDate, setOpportunityDate] = useState(new Date());
+  const [opportunityUsers, setOpportunityUsers] = useState<any[]>([]);
+  const [opportunityContacts, setOpportunityContacts] = useState<any[]>([]);
+  const [opportunityStatuses, setOpportunityStatuses] = useState<any[]>([]);
+  const [opportunityOptionsLoading, setOpportunityOptionsLoading] = useState(false);
+  const [savingOpportunity, setSavingOpportunity] = useState(false);
+  const [opportunityError, setOpportunityError] = useState('');
+  const [showOpportunityDatePicker, setShowOpportunityDatePicker] = useState(false);
   const { coords, loading: locationLoading, error: locationError, refreshLocation } = useLocationHook();
 
   const fetchDetails = useCallback(async () => {
@@ -285,6 +295,61 @@ const LeadDetails = ({ route, navigation }: any) => {
     }
   };
 
+  const openOpportunityModal = async () => {
+    setOpportunityForm({ amount: '', confidence: 50, assignedTo: '', contactId: '', note: '', status: '' });
+    setOpportunityDate(new Date());
+    setOpportunityError('');
+    setShowOpportunity(true);
+    try {
+      setOpportunityOptionsLoading(true);
+      const [opportunityResponse, taskResponse] = await Promise.all([
+        getLeadOpportunityOptionsApi(selectedLead.id),
+        getLeadTaskDropdownsApi(),
+      ]);
+      const options = opportunityResponse?.data?.data || {};
+      const users = taskResponse?.data?.data?.users || [];
+      setOpportunityContacts((options.contacts || []).map((item: any) => ({ label: item.name, value: item.id })));
+      setOpportunityStatuses((options.opportunity_statuses || []).map((item: any) => ({ label: item.status_name, value: item.id })));
+      setOpportunityUsers(users.map((item: any) => ({ label: item.name, value: item.id })));
+    } catch {
+      setOpportunityError('Unable to load opportunity options. Please try again.');
+    } finally {
+      setOpportunityOptionsLoading(false);
+    }
+  };
+
+  const saveOpportunity = async () => {
+    const amount = Number(opportunityForm.amount);
+    if (!opportunityForm.amount || !Number.isFinite(amount) || amount <= 0 || !opportunityForm.assignedTo || !opportunityForm.contactId || !opportunityForm.note.trim() || !opportunityForm.status) {
+      setOpportunityError('Amount, assigned user, contact, note and status are required.');
+      return;
+    }
+    try {
+      setSavingOpportunity(true);
+      setOpportunityError('');
+      const response = await createLeadOpportunityApi({
+        lead_id: selectedLead.id,
+        amount,
+        confidence: opportunityForm.confidence,
+        assigned_to: opportunityForm.assignedTo,
+        lead_contact_id: opportunityForm.contactId,
+        note: opportunityForm.note.trim(),
+        estimated_close_date: formatTaskDate(opportunityDate),
+        status: opportunityForm.status,
+      });
+      if (response?.data?.status !== 'success') throw new Error(response?.data?.message || 'Unable to create opportunity.');
+      setShowOpportunity(false);
+      await fetchDetails();
+      Alert.alert('Opportunity Created', 'The opportunity was created successfully and added to lead activity.');
+    } catch (requestError: any) {
+      const apiMessage = requestError?.response?.data?.message;
+      const message = typeof apiMessage === 'string' ? apiMessage : apiMessage && typeof apiMessage === 'object' ? Object.values(apiMessage).flat().join('\n') : requestError?.message;
+      setOpportunityError(message || 'Unable to create opportunity. Please try again.');
+    } finally {
+      setSavingOpportunity(false);
+    }
+  };
+
   if (loading && !data.firm) {
     return <View style={styles.stateContainer}><ActivityIndicator size="large" color={colors.blue} /><AppText size={14} color="#687086" family="InterMedium">Loading lead details...</AppText></View>;
   }
@@ -355,7 +420,7 @@ const LeadDetails = ({ route, navigation }: any) => {
           <ActionTile icon="activity" label="Activity" onPress={() => setShowActivity(true)} />
           <ActionTile icon="note" label="Note" onPress={() => { setNoteText(''); setNoteError(''); setShowNote(true); }} />
           <ActionTile icon="task" label="Task" onPress={openTaskModal} />
-          <ActionTile icon="opportunity" label="Opportunity" />
+          <ActionTile icon="opportunity" label="Opportunity" onPress={openOpportunityModal} />
         </View>
       </Section>
 
@@ -496,6 +561,48 @@ const LeadDetails = ({ route, navigation }: any) => {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <Modal visible={showOpportunity} transparent animationType="fade" statusBarTranslucent onRequestClose={() => !savingOpportunity && setShowOpportunity(false)}>
+        <KeyboardAvoidingView style={styles.noteModalBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={styles.opportunityModal}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalTitleIcon}><DetailIcon type="opportunity" color="white" /></View>
+              <View style={{ flex: 1 }}>
+                <AppText size={19} color="#202432" family="InterBold">Create Opportunity</AppText>
+                <AppText size={12} color="#858DA0" family="InterRegular">Add value and expected closure details</AppText>
+              </View>
+              <Pressable style={styles.modalClose} disabled={savingOpportunity} onPress={() => setShowOpportunity(false)}><DetailIcon type="close" size={19} /></Pressable>
+            </View>
+            <ScrollView contentContainerStyle={styles.taskModalBody} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <TaskFieldLabel icon="rupee" label="Opportunity Amount" required />
+              <View style={styles.amountField}><AppText size={21} color={colors.blue} family="InterBold">₹</AppText><TextInput value={opportunityForm.amount} onChangeText={value => { setOpportunityForm(current => ({ ...current, amount: value.replace(/[^0-9.]/g, '') })); setOpportunityError(''); }} placeholder="Enter amount" placeholderTextColor="#A2A9B7" keyboardType="decimal-pad" style={styles.amountInput} /></View>
+
+              <View style={styles.confidenceCard}>
+                <View style={styles.confidenceHeader}><View><AppText size={13} color="#4F586D" family="InterSemiBold">Confidence</AppText><AppText size={11} color="#9299A8" family="InterRegular">Likelihood of closing</AppText></View><View style={styles.confidenceBadge}><AppText size={14} color={colors.blue} family="InterBold">{opportunityForm.confidence}%</AppText></View></View>
+                <ConfidenceSlider value={opportunityForm.confidence} onChange={confidence => setOpportunityForm(current => ({ ...current, confidence }))} />
+                <View style={styles.confidenceScale}><AppText size={10} color="#9AA1B0" family="InterMedium">0%</AppText><AppText size={10} color="#9AA1B0" family="InterMedium">100%</AppText></View>
+              </View>
+
+              <TaskFieldLabel icon="user" label="Assign To" required />
+              <Dropdown dropdownPosition="auto" maxHeight={260} style={styles.taskDropdown} containerStyle={styles.opportunityDropdownMenu} data={opportunityUsers} labelField="label" valueField="value" value={opportunityForm.assignedTo} onChange={item => { setOpportunityForm(current => ({ ...current, assignedTo: item.value })); setOpportunityError(''); }} placeholder={opportunityOptionsLoading ? 'Loading users...' : 'Select user'} placeholderStyle={styles.taskPlaceholder} selectedTextStyle={styles.taskSelectedText} disable={opportunityOptionsLoading} />
+              <TaskFieldLabel icon="contact" label="Lead Contact" required />
+              <Dropdown dropdownPosition="auto" maxHeight={260} style={styles.taskDropdown} containerStyle={styles.opportunityDropdownMenu} data={opportunityContacts} labelField="label" valueField="value" value={opportunityForm.contactId} onChange={item => { setOpportunityForm(current => ({ ...current, contactId: item.value })); setOpportunityError(''); }} placeholder={opportunityOptionsLoading ? 'Loading contacts...' : 'Select contact'} placeholderStyle={styles.taskPlaceholder} selectedTextStyle={styles.taskSelectedText} disable={opportunityOptionsLoading} />
+              <TaskFieldLabel icon="note" label="Opportunity Note" required />
+              <TextInput value={opportunityForm.note} onChangeText={note => { setOpportunityForm(current => ({ ...current, note: note.slice(0, 1000) })); setOpportunityError(''); }} placeholder="Add context, requirements or next steps..." placeholderTextColor="#A2A9B7" multiline textAlignVertical="top" style={styles.opportunityNote} />
+              <TaskFieldLabel icon="calendar" label="Estimated Close Date" required />
+              <Pressable style={styles.taskScheduleField} onPress={() => setShowOpportunityDatePicker(true)}><AppText size={14} color="#30384A" family="InterSemiBold">{displayTaskDate(opportunityDate)}</AppText><DetailIcon type="calendar" size={18} /></Pressable>
+              {showOpportunityDatePicker && <DateTimePicker value={opportunityDate} mode="date" display={Platform.OS === 'ios' ? 'spinner' : 'default'} minimumDate={new Date()} onChange={(_, value) => { setShowOpportunityDatePicker(false); if (value) setOpportunityDate(value); }} />}
+              <TaskFieldLabel icon="status" label="Opportunity Status" required />
+              <Dropdown dropdownPosition="top" maxHeight={240} style={styles.taskDropdown} containerStyle={styles.opportunityDropdownMenu} data={opportunityStatuses} labelField="label" valueField="value" value={opportunityForm.status} onChange={item => { setOpportunityForm(current => ({ ...current, status: item.value })); setOpportunityError(''); }} placeholder={opportunityOptionsLoading ? 'Loading statuses...' : 'Select status'} placeholderStyle={styles.taskPlaceholder} selectedTextStyle={styles.taskSelectedText} disable={opportunityOptionsLoading} />
+              {opportunityError ? <AppText size={12} color="#C43D36" family="InterMedium" style={styles.taskErrorText}>{opportunityError}</AppText> : null}
+              <View style={styles.taskActions}>
+                <Pressable style={styles.taskCancelButton} disabled={savingOpportunity} onPress={() => setShowOpportunity(false)}><AppText size={15} color={colors.blue} family="InterBold">Cancel</AppText></Pressable>
+                <Pressable style={[styles.taskSaveButton, savingOpportunity && { opacity: 0.65 }]} disabled={savingOpportunity || opportunityOptionsLoading} onPress={saveOpportunity}>{savingOpportunity ? <ActivityIndicator color="white" /> : <DetailIcon type="save" color="white" size={18} />}<AppText size={15} color="white" family="InterBold">{savingOpportunity ? 'Saving...' : 'Create'}</AppText></Pressable>
+              </View>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </ScrollView>
   );
 };
@@ -537,6 +644,18 @@ const ActionTile = ({ icon, label, onPress }: any) => (
 const TaskFieldLabel = ({ icon, label, required = false }: any) => (
   <View style={styles.taskLabelRow}><DetailIcon type={icon} size={16} /><AppText size={13} color="#4F586D" family="InterSemiBold">{label}{required ? ' *' : ''}</AppText></View>
 );
+
+const ConfidenceSlider = ({ value, onChange }: { value: number; onChange: (value: number) => void }) => {
+  const [width, setWidth] = useState(0);
+  const update = (x: number) => onChange(Math.round(Math.max(0, Math.min(100, (x / Math.max(width, 1)) * 100))));
+  const responder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderGrant: event => update(event.nativeEvent.locationX),
+    onPanResponderMove: event => update(event.nativeEvent.locationX),
+  }), [width]);
+  return <View style={styles.sliderTouch} onLayout={event => setWidth(event.nativeEvent.layout.width)} {...responder.panHandlers}><View style={styles.sliderTrack}><View style={[styles.sliderFill, { width: `${value}%` }]} /><View style={[styles.sliderThumb, { left: `${value}%` }]} /></View></View>;
+};
 
 const ActivityLogCard = ({ item, last }: any) => (
   <View style={styles.activityEntryRow}>
@@ -583,6 +702,9 @@ const DetailIcon = ({ type, size = 21, color = colors.blue }: any) => {
     activity: <><Path d="M4 12h4l2-6 4 12 2-6h4" {...line} /></>,
     task: <><Rect x="4" y="3" width="16" height="18" rx="2" {...line} /><Path d="M8 8l1 1 2-2m2 1h3M8 14l1 1 2-2m2 1h3" {...line} /></>,
     opportunity: <><Circle cx="12" cy="9" r="5" {...line} /><Path d="M9 15h6m-5 3h4m-2-14V2" {...line} /></>,
+    rupee: <><Path d="M6 5h12M6 9h12M7 5c7 0 7 8 0 8l9 7" {...line} /></>,
+    contact: <><Circle cx="9" cy="8" r="3" {...line} /><Path d="M3 19c.5-4 2.5-6 6-6s5.5 2 6 6m2-11h4m-2-2v4" {...line} /></>,
+    status: <><Circle cx="12" cy="12" r="9" {...line} /><Path d="M8 12l3 3 5-6" {...line} /></>,
     calendar: <><Rect x="3" y="5" width="18" height="16" rx="2" {...line} /><Path d="M7 3v4m10-4v4M3 10h18" {...line} /></>,
     user: <><Circle cx="12" cy="8" r="4" {...line} /><Path d="M4 21c.6-5 3-7 8-7s7.4 2 8 7" {...line} /></>,
     close: <Path d="M6 6l12 12M18 6L6 18" {...line} />,
@@ -661,6 +783,19 @@ const styles = StyleSheet.create({
   checkoutInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 13, padding: 11, borderRadius: 12, backgroundColor: colors.blue + '08', borderWidth: 1, borderColor: colors.blue + '15' },
   checkoutInfoIcon: { width: 34, height: 34, borderRadius: 11, backgroundColor: colors.blue + '0D', alignItems: 'center', justifyContent: 'center' },
   taskModal: { width: '100%', maxWidth: 540, maxHeight: '88%', overflow: 'hidden', borderRadius: 22, backgroundColor: '#F8F9FC', elevation: 12, shadowColor: '#111827', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 18 },
+  opportunityModal: { width: '100%', maxWidth: 540, maxHeight: '92%', overflow: 'hidden', borderRadius: 22, backgroundColor: '#F8F9FC', elevation: 12, shadowColor: '#111827', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 18 },
+  opportunityDropdownMenu: { borderRadius: 16, borderColor: '#D8DEE9', elevation: 12, shadowColor: '#111827', shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.18, shadowRadius: 14 },
+  amountField: { height: 58, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 15, borderWidth: 1, borderColor: '#D8DEE9', borderRadius: 13, backgroundColor: 'white' },
+  amountInput: { flex: 1, height: '100%', padding: 0, color: '#30384A', fontSize: 17, fontFamily: fonts.InterSemiBold },
+  confidenceCard: { marginTop: 15, padding: 15, borderRadius: 14, backgroundColor: 'white', borderWidth: 1, borderColor: '#E1E5ED' },
+  confidenceHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  confidenceBadge: { minWidth: 52, paddingHorizontal: 10, paddingVertical: 6, alignItems: 'center', borderRadius: 11, backgroundColor: colors.blue + '10' },
+  sliderTouch: { height: 38, justifyContent: 'center', marginTop: 8 },
+  sliderTrack: { height: 5, borderRadius: 3, backgroundColor: '#DDE2EB' },
+  sliderFill: { height: 5, borderRadius: 3, backgroundColor: colors.blue },
+  sliderThumb: { position: 'absolute', top: -7, width: 19, height: 19, marginLeft: -9, borderRadius: 10, backgroundColor: colors.blue, borderWidth: 3, borderColor: 'white', elevation: 3, shadowColor: colors.blue, shadowOpacity: 0.25, shadowRadius: 3 },
+  confidenceScale: { flexDirection: 'row', justifyContent: 'space-between', marginTop: -3 },
+  opportunityNote: { minHeight: 82, paddingHorizontal: 14, paddingTop: 12, paddingBottom: 12, borderWidth: 1, borderColor: '#D8DEE9', borderRadius: 13, backgroundColor: 'white', color: '#30384A', fontSize: 14, fontFamily: fonts.InterMedium, lineHeight: 20 },
   taskModalBody: { padding: 18, paddingBottom: 22 },
   taskLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 14, marginBottom: 7 },
   taskDropdown: { height: 52, paddingHorizontal: 14, borderWidth: 1, borderColor: '#D8DEE9', borderRadius: 13, backgroundColor: 'white' },

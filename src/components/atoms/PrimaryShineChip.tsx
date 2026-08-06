@@ -3,7 +3,7 @@ import { Animated, Easing, StyleSheet, View } from 'react-native';
 import AppText from '../AppText/AppText';
 import { colors } from '../../utils/Colors';
 
-const PrimaryShineChip = () => {
+const PrimaryShineChip = ({ label = 'Primary' }: { label?: string }) => {
   const shine = useRef(new Animated.Value(-40)).current;
 
   useEffect(() => {
@@ -31,7 +31,7 @@ const PrimaryShineChip = () => {
   return (
     <View style={styles.chip}>
       <Animated.View style={[styles.shine, { transform: [{ translateX: shine }, { rotate: '18deg' }] }]} />
-      <AppText color={colors.blue} size={11} family="InterSemiBold">Primary</AppText>
+      <AppText color={colors.blue} size={11} family="InterSemiBold">{label}</AppText>
     </View>
   );
 };

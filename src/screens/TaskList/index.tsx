@@ -30,8 +30,9 @@ const normalizeTask = (item: any, tab: 'lead' | 'management') => tab === 'lead' 
   priority: item?.task_priority?.name || 'Normal', status: titleCase(item?.task_status),
 };
 
-const TaskList = () => {
-  const [tab, setTab] = useState<'lead' | 'management'>('lead');
+const TaskList = ({ route }: any) => {
+  const requestedTab = route?.params?.initialTab === 'management' ? 'management' : 'lead';
+  const [tab, setTab] = useState<'lead' | 'management'>(requestedTab);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [tasks, setTasks] = useState<any[]>([]);
@@ -52,6 +53,10 @@ const TaskList = () => {
   const [showCalendar, setShowCalendar] = useState(false);
   const [rangeType, setRangeType] = useState('custom');
   const sheetRef = useRef<ActionSheetRef>(null);
+
+  useEffect(() => {
+    setTab(requestedTab);
+  }, [requestedTab]);
 
   useEffect(() => { const timer = setTimeout(() => setDebouncedSearch(search.trim()), 350); return () => clearTimeout(timer); }, [search]);
   useEffect(() => { getLeadTaskDropdownsApi().then(response => setUsers(response?.data?.data?.users || [])).catch(() => setUsers([])); }, []);

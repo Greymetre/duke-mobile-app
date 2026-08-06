@@ -37,6 +37,7 @@ const Notifications = () => {
 
   const navigateFromNotification = (notification: AppNotification) => {
     const model = notification.model?.trim().toLowerCase();
+    const notificationType = notification.type?.trim().toLowerCase().replace(/[\s-]+/g, '_');
     if (model === 'general_notification') {
       navigation.navigate('BottomTab', {
         screen: 'News',
@@ -50,6 +51,18 @@ const Notifications = () => {
       } else {
         navigation.navigate('LeadKonnect');
       }
+      return;
+    }
+    if (model === 'opportunity' || model === 'lead_opportunity' || notificationType === 'opportunity' || notificationType === 'new_opportunity') {
+      navigation.navigate('OpportunityList');
+      return;
+    }
+    if (model === 'task' || model === 'lead_task' || notificationType === 'lead_task') {
+      navigation.navigate('TaskList', {initialTab: 'lead'});
+      return;
+    }
+    if (model === 'task_management' || model === 'management_task' || model === 'assigned_task' || notificationType === 'task_management') {
+      navigation.navigate('TaskList', {initialTab: 'management'});
       return;
     }
     if (!model || notification.model_id === null || notification.model_id === undefined) {

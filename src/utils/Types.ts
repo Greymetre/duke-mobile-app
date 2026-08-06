@@ -72,7 +72,9 @@ export type RootStackParamList = {
   CreateLead: undefined
   LeadDetails: { lead?: any } | undefined
   EditLead: { lead?: any } | undefined
-  TaskList: undefined
+  OpportunityList: undefined
+  Documents: undefined
+  TaskList: { initialTab?: 'lead' | 'management' } | undefined
 };
 
 export type AppTextProps = {

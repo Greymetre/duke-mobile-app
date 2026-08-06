@@ -18,6 +18,18 @@ export const getLeadTaskDropdownsApi = () =>
 export const createLeadTaskApi = (payload: Record<string, any>) =>
   axiosClient.post('api/addleadTask', payload);
 
+export const getLeadOpportunityOptionsApi = (leadId: string | number) =>
+  axiosClient.get('api/getLeadContacts', { params: { lead_id: leadId } });
+
+export const createLeadOpportunityApi = (payload: Record<string, any>) =>
+  axiosClient.post('api/addLeadopportunity', payload);
+
+export const getAllLeadOpportunitiesApi = (params?: Record<string, any>) =>
+  axiosClient.get('api/getAllOpportunities', { params });
+
+export const deleteLeadOpportunityApi = (opportunityId: string | number) =>
+  axiosClient.post('api/deleteOpportunity', { opportunity_id: opportunityId });
+
 export const getLeadTasksApi = (params?: Record<string, any>) =>
   axiosClient.get('api/getLeadTasks', { params });
 
