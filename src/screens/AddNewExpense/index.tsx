@@ -252,6 +252,10 @@ const AddNewExpense = () => {
       Toast.show({ type: 'error', text1: 'Please enter valid start and stop km' });
       return false;
     }
+    if (!note.trim()) {
+      Toast.show({ type: 'error', text1: 'Please enter note' });
+      return false;
+    }
     if (attachmentRequired && attachments.length + existingAttachments.length === 0) {
       Toast.show({ type: 'error', text1: 'At least one expense attachment is required' });
       return false;
@@ -270,7 +274,7 @@ const AddNewExpense = () => {
     if (startKm) fd.append('start_km', startKm);
     if (stopKm) fd.append('stop_km', stopKm);
     if (showKmFields) fd.append('total_km', String(totalKm));
-    if (note.trim()) fd.append('note', note.trim());
+    fd.append('note', note.trim());
     attachments.forEach((attachment, index) => {
       if (attachment?.uri) {
         fd.append('expense_file[]', {
@@ -415,7 +419,7 @@ const AddNewExpense = () => {
             editable={!isAutoClaimAmount}
           />
 
-          <AppText size={16} color="#000000" family="InterSemiBold">Note</AppText>
+          <AppText size={16} color="#000000" family="InterSemiBold">Note *</AppText>
           <TextInput
             style={[styles.input, styles.textArea]}
             placeholder="Enter note"
