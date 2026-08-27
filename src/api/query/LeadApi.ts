@@ -1,4 +1,5 @@
 import axiosClient from '../AxiosClient';
+import { API_ENDPOINT } from '../ApiUrls';
 
 export const getLeadStatusSourceApi = () =>
   axiosClient.get('api/getLeadStatusSource');
@@ -65,3 +66,16 @@ export const createLeadApi = (payload: Record<string, any>) =>
 
 export const updateLeadApi = (payload: Record<string, any>) =>
   axiosClient.post('api/leadCreate', payload);
+
+export const initiateClickToCallApi = (payload: {
+  to: string;
+  from?: string;
+  lead_id?: string | number;
+  lead_name?: string;
+}) => axiosClient.post(API_ENDPOINT.CLICK_TO_CALL, payload);
+
+export const getClickToCallStatusApi = (callLogId: string | number) =>
+  axiosClient.get(`${API_ENDPOINT.CLICK_TO_CALL_STATUS}/${callLogId}/status`);
+
+export const getMyCallHistoryApi = (params?: Record<string, any>) =>
+  axiosClient.get(API_ENDPOINT.MY_CALL_HISTORY, { params });

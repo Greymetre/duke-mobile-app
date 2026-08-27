@@ -1,15 +1,16 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Linking, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import ActionSheet, { ActionSheetRef } from 'react-native-actions-sheet';
 import { Dropdown } from 'react-native-element-dropdown';
 import { useFocusEffect } from '@react-navigation/native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { PlusAddIcon } from '../../assets/svgs/SvgsFile';
-import { getLeadsApi, getLeadStatusSourceApi } from '../../api/query/LeadApi';
+import { getClickToCallStatusApi, getLeadsApi, getLeadStatusSourceApi, initiateClickToCallApi } from '../../api/query/LeadApi';
 import AppText from '../../components/AppText/AppText';
 import CustomerCalendar from '../../components/CustomCalendar/CalendarPopupView';
 import { colors } from '../../utils/Colors';
 import { fonts } from '../../utils/typography';
+import { useAppSelector } from '../../components/redux/Store';
 
 const formatYYYYMMDD = (date: Date | null) => {
   if (!date) return '';
@@ -71,7 +72,16 @@ const openLocation = async (location: string) => {
   }
 };
 
+const toPlivoE164 = (phone: string) => {
+  const digits = cleanPhoneNumber(phone);
+  if (!digits) return '';
+  if (digits.length > 10) return `+${digits}`;
+  return `+91${digits}`;
+};
+
 const LeadKonnect = ({ navigation }: any) => {
+  const { user } = useAppSelector(state => state.auth);
+  const canUsePlivoCalling = user?.call_management === true || Number(user?.call_management) === 1;
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [leads, setLeads] = useState<any[]>([]);
@@ -91,6 +101,32 @@ const LeadKonnect = ({ navigation }: any) => {
   const [showCal, setShowCal] = useState(false);
   const [rangeType, setRangeType] = useState('custom');
   const filterSheetRef = useRef<ActionSheetRef>(null);
+  const [callingLeadIds, setCallingLeadIds] = useState<Set<number | string>>(new Set());
+  const [callWaiting, setCallWaiting] = useState({ visible: false, leadName: '', phase: 'Connecting to Plivo...' });
+  const callPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const callTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: canUsePlivoCalling ? () => (
+        <Pressable accessibilityRole="button" accessibilityLabel="Open call history" style={styles.headerCallButton} onPress={() => navigation.navigate('CallHistory')}>
+          <Svg width={23} height={23} viewBox="0 0 24 24" fill="none">
+            <Path d="M6.62 10.79a15.46 15.46 0 006.59 6.59l2.2-2.2a1 1 0 011.02-.24c1.12.37 2.33.57 3.57.57a1 1 0 011 1V20a1 1 0 01-1 1C10.61 21 3 13.39 3 4a1 1 0 011-1h3.5a1 1 0 011 1c0 1.25.2 2.45.57 3.57a1 1 0 01-.25 1.02l-2.2 2.2z" fill={colors.blue} />
+          </Svg>
+        </Pressable>
+      ) : undefined,
+    });
+  }, [canUsePlivoCalling, navigation]);
+
+  const closeCallWaiting = useCallback(() => {
+    if (callPollRef.current) clearInterval(callPollRef.current);
+    if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
+    callPollRef.current = null;
+    callTimeoutRef.current = null;
+    setCallWaiting(prev => ({ ...prev, visible: false }));
+  }, []);
+
+  useEffect(() => closeCallWaiting, [closeCallWaiting]);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search.trim()), 350);
@@ -144,6 +180,88 @@ const LeadKonnect = ({ navigation }: any) => {
     ...sources.map(item => ({ label: item?.value || item?.key, value: item?.key || item?.value })),
   ], [sources]);
   const activeFilterCount = Number(Boolean(selectedUser)) + Number(Boolean(selectedSource)) + Number(Boolean(startDate && endDate));
+
+  const setCallingState = (leadId: string | number, isCalling: boolean) => {
+    setCallingLeadIds(prev => {
+      const next = new Set(prev);
+      if (isCalling) {
+        next.add(leadId);
+      } else {
+        next.delete(leadId);
+      }
+      return next;
+    });
+  };
+
+  const handlePlivoCall = async (item: any) => {
+    const phone = toPlivoE164(item?.contact?.phone_number || item?.phone || '');
+    if (!phone) return;
+
+    if (!canUsePlivoCalling) {
+      openDialer(phone);
+      return;
+    }
+
+    const leadId = item?.id || item?.lead_id || 'lead';
+    setCallingState(leadId, true);
+    setCallWaiting({
+      visible: true,
+      leadName: item?.contact?.name || item?.name || 'Customer',
+      phase: 'Connecting to Plivo...',
+    });
+
+    try {
+      const payload = {
+        to: phone,
+        lead_id: item?.id,
+        lead_name: item?.name || item?.contact?.name || '',
+      };
+      const response = await initiateClickToCallApi(payload);
+      const callLogId = response?.data?.data?.call_log_id;
+      setCallWaiting(prev => ({ ...prev, phase: 'Please wait. Your phone will ring shortly.' }));
+
+      if (!callLogId) {
+        callTimeoutRef.current = setTimeout(closeCallWaiting, 8000);
+        return;
+      }
+
+      callPollRef.current = setInterval(async () => {
+        try {
+          const statusResponse = await getClickToCallStatusApi(callLogId);
+          const callStatus = String(statusResponse?.data?.data?.status || '').toLowerCase();
+          const isAnswered = Boolean(statusResponse?.data?.data?.answered);
+          if (callStatus.includes('ring') || isAnswered || callStatus === 'agent-answered') {
+            setCallWaiting(prev => ({ ...prev, phase: 'Your phone is ringing...' }));
+            setTimeout(closeCallWaiting, 700);
+          } else if (['failed', 'busy', 'cancel', 'timeout'].includes(callStatus)) {
+            closeCallWaiting();
+            Alert.alert('Call unavailable', 'The call could not be connected. Please try again.');
+          }
+        } catch (_) {
+          // Ignore a transient polling failure and retry on the next interval.
+        }
+      }, 1500);
+
+      callTimeoutRef.current = setTimeout(() => {
+        closeCallWaiting();
+        Alert.alert('Still waiting?', 'The call is taking longer than expected. Please try again if your phone does not ring.');
+      }, 45000);
+    } catch (error: any) {
+      closeCallWaiting();
+      const status = error?.response?.status;
+      if (status === 404 || status === 405) {
+        openDialer(phone);
+      } else {
+        Alert.alert(
+          'Call failed',
+          error?.response?.data?.message || 'Unable to start Plivo call. We will try normal dialer.',
+        );
+        openDialer(phone);
+      }
+    } finally {
+      setCallingState(leadId, false);
+    }
+  };
 
   const openFilters = () => {
     setDraftUser(selectedUser);
@@ -218,7 +336,7 @@ const LeadKonnect = ({ navigation }: any) => {
         </View>
 
         <ScrollView style={styles.leadListScroll} contentContainerStyle={styles.leadListContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-          {loading ? <View style={styles.loadingBox}><ActivityIndicator size="large" color={colors.blue} /></View> : leads.length ? leads.map(item => <LeadCard key={item.id} item={item} navigation={navigation} />) : (
+          {loading ? <View style={styles.loadingBox}><ActivityIndicator size="large" color={colors.blue} /></View> : leads.length ? leads.map(item => <LeadCard key={item.id} item={item} navigation={navigation} onCallPress={handlePlivoCall} isCalling={callingLeadIds.has(item.id || item?.lead_id)} />) : (
             <View style={styles.noSearchResults}>
               <AppText size={15} color="#718096" family="InterMedium">No matching leads</AppText>
             </View>
@@ -253,6 +371,26 @@ const LeadKonnect = ({ navigation }: any) => {
           </View>
         </View>
       </ActionSheet>
+      <Modal visible={callWaiting.visible} transparent animationType="fade" statusBarTranslucent onRequestClose={closeCallWaiting}>
+        <View style={styles.callWaitingBackdrop}>
+          <View style={styles.callWaitingCard}>
+            <View style={styles.callPulseOuter}>
+              <View style={styles.callPulseInner}>
+                <Svg width={34} height={34} viewBox="0 0 24 24" fill="none">
+                  <Path d="M6.62 10.79a15.46 15.46 0 006.59 6.59l2.2-2.2a1 1 0 011.02-.24c1.12.37 2.33.57 3.57.57a1 1 0 011 1V20a1 1 0 01-1 1C10.61 21 3 13.39 3 4a1 1 0 011-1h3.5a1 1 0 011 1c0 1.25.2 2.45.57 3.57a1 1 0 01-.25 1.02l-2.2 2.2z" fill="white" />
+                </Svg>
+              </View>
+            </View>
+            <AppText size={22} color="#202432" family="InterBold" style={styles.callWaitingTitle}>Preparing your call</AppText>
+            <AppText size={15} color="#59657A" family="InterMedium" style={styles.callWaitingName}>{callWaiting.leadName}</AppText>
+            <ActivityIndicator size="small" color={colors.blue} style={styles.callWaitingLoader} />
+            <AppText size={14} color="#59657A" family="InterMedium" style={styles.callWaitingMessage}>{callWaiting.phase}</AppText>
+            <Pressable style={styles.callWaitingClose} onPress={closeCallWaiting}>
+              <AppText size={14} color={colors.blue} family="InterBold">Close</AppText>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
       <CustomerCalendar showCal={showCal} setShowCal={setCalendarVisibility} range={rangeType} minimumDate={null} initialStartDate={draftStartDate} initialEndDate={draftEndDate} setRange={setRangeType} onApplyClick={(start, end, type) => { setDraftStartDate(start); setDraftEndDate(end); setRangeType(type || 'custom'); }} />
     </View>
   );
@@ -265,7 +403,7 @@ const SummaryCard = ({ count, label, active = false, onPress }: any) => (
   </Pressable>
 );
 
-const LeadCard = ({ item, navigation }: any) => {
+const LeadCard = ({ item, navigation, onCallPress, isCalling = false }: any) => {
   const phone = cleanPhoneNumber(item?.contact?.phone_number);
   const email = String(item?.contact?.email || '').trim();
   const location = getLeadLocation(item);
@@ -300,7 +438,7 @@ const LeadCard = ({ item, navigation }: any) => {
     <View style={styles.divider} />
 
     <View style={styles.actionRow}>
-      <ActionButton icon="phone" disabled={!phone} onPress={() => openDialer(phone)} />
+      <ActionButton icon="phone" disabled={!phone || isCalling} loading={isCalling} onPress={() => onCallPress(item)} />
       <ActionButton icon="email" disabled={!email} onPress={() => openMail(email)} />
       <ActionButton icon="whatsapp" disabled={!phone} onPress={() => openWhatsApp(phone)} />
       <ActionButton icon="location" disabled={!location} onPress={() => openLocation(location)} />
@@ -314,7 +452,7 @@ const InfoCell = ({ icon, text, placeholder = false }: any) => (
   <View style={styles.infoCell}><LeadListIcon type={icon} color={placeholder ? '#A9B0BF' : colors.blue} /><AppText size={14} color={placeholder ? '#A9B0BF' : '#50596D'} family={placeholder ? 'InterRegular' : 'InterMedium'} numLines={1} style={{ flex: 1 }}>{text}</AppText></View>
 );
 
-const ActionButton = ({ icon, onPress, disabled = false }: any) => (
+const ActionButton = ({ icon, onPress, disabled = false, loading = false }: any) => (
   <Pressable
     style={[
       styles.actionButton,
@@ -324,7 +462,11 @@ const ActionButton = ({ icon, onPress, disabled = false }: any) => (
     onPress={onPress}
     disabled={disabled}
   >
-    <LeadListIcon type={icon} size={19} color={disabled ? '#B7BDCA' : colors.blue} />
+    {loading ? (
+      <ActivityIndicator color={colors.blue} size="small" />
+    ) : (
+      <LeadListIcon type={icon} size={19} color={disabled ? '#B7BDCA' : colors.blue} />
+    )}
   </Pressable>
 );
 
@@ -348,6 +490,16 @@ const LeadListIcon = ({ type, size = 21, color = colors.blue }: any) => {
 };
 
 const styles = StyleSheet.create({
+  headerCallButton: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#EDF3FF', alignItems: 'center', justifyContent: 'center' },
+  callWaitingBackdrop: { flex: 1, backgroundColor: 'rgba(13, 25, 48, 0.72)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  callWaitingCard: { width: '100%', maxWidth: 360, borderRadius: 28, backgroundColor: 'white', alignItems: 'center', paddingHorizontal: 28, paddingTop: 34, paddingBottom: 24 },
+  callPulseOuter: { width: 92, height: 92, borderRadius: 46, backgroundColor: '#E8F0FF', alignItems: 'center', justifyContent: 'center', marginBottom: 22 },
+  callPulseInner: { width: 64, height: 64, borderRadius: 32, backgroundColor: colors.blue, alignItems: 'center', justifyContent: 'center' },
+  callWaitingTitle: { textAlign: 'center' },
+  callWaitingName: { textAlign: 'center', marginTop: 8 },
+  callWaitingLoader: { marginTop: 24, marginBottom: 13 },
+  callWaitingMessage: { textAlign: 'center', lineHeight: 21, minHeight: 42 },
+  callWaitingClose: { marginTop: 20, paddingHorizontal: 24, paddingVertical: 11, borderRadius: 18, backgroundColor: '#EDF3FF' },
   container: { flex: 1, backgroundColor: '#F4F6FA' },
   listContent: { flex: 1, padding: 16, paddingBottom: 0 },
   searchRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },

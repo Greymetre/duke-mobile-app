@@ -69,6 +69,8 @@ export type RootStackParamList = {
   Notifications: undefined
   MyProfile: undefined
   LeadKonnect: undefined
+  CallHistory: undefined
+  CallDetails: { call: any }
   CreateLead: undefined
   LeadDetails: { lead?: any } | undefined
   EditLead: { lead?: any } | undefined

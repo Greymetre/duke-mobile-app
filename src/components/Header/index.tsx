@@ -24,6 +24,7 @@ const CustomHeader = ({ navigation, route, options, back }: any) => {
         <View style={styles.titleView}>
           <AppText size={18} color='black' family='InterMedium' opacity={0.8}>{title}</AppText>
         </View>
+        {options.headerRight ? <View style={styles.rightView}>{options.headerRight({})}</View> : null}
       </View>
     </SafeAreaView>
   )
@@ -44,8 +45,10 @@ const styles = StyleSheet.create({
     alignItems: "center"
   },
   titleView: {
-    paddingLeft: rw(15)
+    paddingLeft: rw(15),
+    flex: 1
   },
+  rightView: { marginLeft: 12 },
 });
 
 export default CustomHeader

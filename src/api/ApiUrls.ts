@@ -18,6 +18,9 @@ export const API_ENDPOINT = {
   READ_NOTIFICATION: "api/notifications/read",
   GET_PROFILE: "api/getProfile",
   UPDATE_PROFILE: "api/updateProfile",
+  CLICK_TO_CALL: "api/click-to-call",
+  CLICK_TO_CALL_STATUS: "api/click-to-call",
+  MY_CALL_HISTORY: "api/my-call-history",
 
   //customer 
   MASTER_DISTRIBUTOR_GET: "api/master-distributors?per_page=20",
