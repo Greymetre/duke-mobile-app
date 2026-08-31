@@ -26,7 +26,7 @@ const dateLabel = (value?: string) => value
   : '-';
 
 const CallHistory = ({ navigation }: any) => {
-  const [period, setPeriod] = useState('weekly');
+  const [period, setPeriod] = useState('monthly');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'connected' | 'not_connected'>('all');
