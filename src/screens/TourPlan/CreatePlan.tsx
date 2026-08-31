@@ -212,7 +212,12 @@ const CreatePlan: React.FC = ({ navigation, route }: any) => {
 
   const formatDate = (d: Date): string => {
     const day = String(d.getDate()).padStart(2, '0');
-    const month = d.toLocaleString('default', { month: 'short' }).toUpperCase();
+    // Do not use locale short month names here. Android may return "Sept"
+    // while iOS returns "Sep", which made the submit parser fall back to January.
+    const month = [
+      'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
+      'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
+    ][d.getMonth()];
     const year = d.getFullYear();
     return `${day} ${month} ${year}`;
   };
@@ -400,7 +405,7 @@ const CreatePlan: React.FC = ({ navigation, route }: any) => {
 
     const monthMap: Record<string, string> = {
       JAN: '01', FEB: '02', MAR: '03', APR: '04', MAY: '05', JUN: '06',
-      JUL: '07', AUG: '08', SEP: '09', OCT: '10', NOV: '11', DEC: '12',
+      JUL: '07', AUG: '08', SEP: '09', SEPT: '09', OCT: '10', NOV: '11', DEC: '12',
     };
 
     committedPlans.forEach((p, i) => {
@@ -413,8 +418,11 @@ const CreatePlan: React.FC = ({ navigation, route }: any) => {
 
       // Only add to payload if no errors so far (or collect all and check later)
       const [day, mon, year] = (p.date || '').split(' ');
-      const monthNum = monthMap[mon?.toUpperCase?.() ?? ''] || '01';
-      const isoDate = day ? `${day.padStart(2, '0')}-${monthNum}-${year}` : '';
+      const monthNum = monthMap[mon?.toUpperCase?.() ?? ''];
+      if (p.date?.trim() && !monthNum) errors.push(`Row ${rowNum}: Invalid date`);
+      const isoDate = day && monthNum && year
+        ? `${day.padStart(2, '0')}-${monthNum}-${year}`
+        : '';
 
       payloadRows.push({
         date: isoDate,
