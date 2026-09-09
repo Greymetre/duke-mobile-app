@@ -258,11 +258,16 @@ const ExpenseDetails = ({ navigation, route }: any) => {
       setApproveAmount(String(details?.approve_amount || details?.claim_amount || ''));
     } catch (error: any) {
       console.log('Expense details error:', error?.response || error);
-      Toast.show({ type: 'error', text1: 'Failed to load expense details' });
+      // The list item already contains enough data to render this screen. If
+      // the optional detail refresh fails, keep showing that data without a
+      // misleading error toast. Only report an error when there is no fallback.
+      if (!routeExpense) {
+        Toast.show({ type: 'error', text1: 'Failed to load expense details' });
+      }
     } finally {
       setLoading(false);
     }
-  }, [expenseId]);
+  }, [expenseId, routeExpense]);
 
   useFocusEffect(
     useCallback(() => {

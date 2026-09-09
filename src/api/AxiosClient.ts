@@ -52,26 +52,26 @@ axiosClient.interceptors.response.use(
   },
   error => {
     const status = error?.response?.status;
-    const message = error?.response?.data?.message;
-    const errorMsg = error?.response?.data?.error;
-    if (
-      status == 500 ||
-      message == 'Server error: Unauthenticated.' ||
-      errorMsg == 'Unauthenticated.'
-    ) {
+    const message = String(error?.response?.data?.message || '').toLowerCase();
+    const errorMsg = String(error?.response?.data?.error || '').toLowerCase();
+    const isUnauthenticated =
+      status === 401 ||
+      message.includes('unauthenticated') ||
+      errorMsg.includes('unauthenticated');
+
+    // A 500 response is a server/endpoint failure, not proof that the user's
+    // session has expired. Logging out on every 500 caused screens such as
+    // Expense Details to clear a valid session when their API request failed.
+    if (isUnauthenticated) {
 
       Toast.show({
         type: 'error',
         text1: 'Session expired. Please login again',
       });
-      // navigation.navigate('LoginScreen')
       store.dispatch(logout());
-      store.dispatch(setUser(null))
-      store.dispatch(setToken(null))
-      // ✅ clear redux auth
-      store.dispatch(logout());
+      store.dispatch(setUser(null));
+      store.dispatch(setToken(null));
 
-      // ✅ navigate to login
       navigationRef.current?.reset({
         index: 0,
         routes: [{ name: 'LoginScreen' }],
