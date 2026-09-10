@@ -9,7 +9,7 @@ import AppText from '../components/AppText/AppText';
 import Home from '../screens/Home';
 import OrderList from '../screens/OrderScreen';
 import News from '../screens/News';
-import Reports from '../screens/reports';
+import PAC from '../screens/PAC';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppSelector } from '../components/redux/Store';
 const Tab = createBottomTabNavigator();
@@ -131,9 +131,9 @@ const BottomTab = () => {
           ),
         }}
       />
-      <Tab.Screen name='ReportsTab' component={Reports} options={{
-        headerShown: true,
-        title: 'Reports',
+      <Tab.Screen name='PAC' component={PAC} options={{
+        headerShown: false,
+        title: 'PAC',
         tabBarIcon: ({ focused }) => (
           <View
             style={{
@@ -148,7 +148,7 @@ const BottomTab = () => {
             }}
           >
             {focused ? <ActiveReportTabIcon /> : <ReportTabIcon />}
-            <AppText color={colors.blue} family={focused ? "InterRegular" : 'InterMedium'} size={13}>Reports</AppText>
+            <AppText color={colors.blue} family={focused ? "InterRegular" : 'InterMedium'} size={13}>PAC</AppText>
           </View>
         ),
       }} />

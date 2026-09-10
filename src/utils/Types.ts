@@ -20,6 +20,9 @@ export type RootStackParamList = {
   ForceUpdateScreen: undefined;
   CreatePlan: undefined | { item: number | string };
   BottomTab: undefined;
+  CreatePAC: undefined;
+  PACDetails: { activityId: number };
+  PACExecution: { activityId: number };
   CustomerList: {
     type?: string;
     beatId?: string | number;

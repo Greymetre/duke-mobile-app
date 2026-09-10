@@ -47,6 +47,9 @@ import OpportunityList from '../screens/LeadKonnect/OpportunityList';
 import CallHistory from '../screens/LeadKonnect/CallHistory';
 import CallDetails from '../screens/LeadKonnect/CallDetails';
 import Documents from '../screens/Documents';
+import CreatePAC from '../screens/PAC/CreatePAC';
+import PACDetails from '../screens/PAC/PACDetails';
+import PACExecution from '../screens/PAC/PACExecution';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -81,6 +84,9 @@ const Routes = () => {
         />
         <Stack.Screen name='AccountPendingScreen' component={AccountPendingScreen} />
         <Stack.Screen name='BottomTab' component={BottomTab} />
+        <Stack.Screen name='CreatePAC' component={CreatePAC} />
+        <Stack.Screen name='PACDetails' component={PACDetails} />
+        <Stack.Screen name='PACExecution' component={PACExecution} />
         <Stack.Screen name='CustomerDetails' component={CustomerDetails} options={{
           headerShown: true,
           title: 'Customer Details'
