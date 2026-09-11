@@ -51,6 +51,37 @@ export const styles = StyleSheet.create({
         backgroundColor: '#F2F3F7',
         color: '#4A5568',
     },
+    radioGroup: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 28,
+        minHeight: 48,
+        marginVertical: 10,
+    },
+    radioOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingVertical: 8,
+    },
+    radioCircle: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        borderWidth: 2,
+        borderColor: '#718096',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    radioCircleSelected: {
+        borderColor: colors.blue,
+    },
+    radioDot: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        backgroundColor: colors.blue,
+    },
     textArea: {
         minHeight: 96,
         paddingTop: 12,

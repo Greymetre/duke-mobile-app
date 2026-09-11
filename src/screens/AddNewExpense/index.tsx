@@ -90,11 +90,19 @@ const AddNewExpense = () => {
   const [expenseTypes, setExpenseTypes] = useState<any[]>([]);
   const [selectedType, setSelectedType] = useState<any>(editExpense?.expenses_type || null);
   const [expenseDate, setExpenseDate] = useState(normalizeDateForInput(editExpense?.date));
+  const [nightHalt, setNightHalt] = useState<'1' | '0' | null>(() => {
+    const value = editExpense?.night_halt;
+    if (value === true || value === 1 || value === '1' || value === 'yes') return '1';
+    if (value === false || value === 0 || value === '0' || value === 'no') return '0';
+    return null;
+  });
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [rate, setRate] = useState(normalizeNumericInput(String(editExpense?.rate || '')));
   const [startKm, setStartKm] = useState(normalizeNumericInput(String(editExpense?.start_km || '')));
   const [stopKm, setStopKm] = useState(normalizeNumericInput(String(editExpense?.stop_km || '')));
   const [claimAmount, setClaimAmount] = useState(normalizeNumericInput(String(editExpense?.claim_amount || '')));
+  const [expenseFrom, setExpenseFrom] = useState(editExpense?.from || '');
+  const [expenseTo, setExpenseTo] = useState(editExpense?.to || '');
   const [note, setNote] = useState(editExpense?.note || '');
   const [attachments, setAttachments] = useState<Asset[]>([]);
   const [existingAttachments, setExistingAttachments] = useState<any[]>([]);
@@ -244,12 +252,24 @@ const AddNewExpense = () => {
       Toast.show({ type: 'error', text1: 'Please select expense date' });
       return false;
     }
+    if (nightHalt === null) {
+      Toast.show({ type: 'error', text1: 'Please select Night Halt' });
+      return false;
+    }
     if (!claimAmount || Number(claimAmount) <= 0) {
       Toast.show({ type: 'error', text1: 'Please enter claim amount' });
       return false;
     }
     if (showKmFields && (!startKm || !stopKm || Number(stopKm) <= Number(startKm))) {
       Toast.show({ type: 'error', text1: 'Please enter valid start and stop km' });
+      return false;
+    }
+    if (!expenseFrom.trim()) {
+      Toast.show({ type: 'error', text1: 'Please enter expense from location' });
+      return false;
+    }
+    if (!expenseTo.trim()) {
+      Toast.show({ type: 'error', text1: 'Please enter expense to location' });
       return false;
     }
     if (!note.trim()) {
@@ -271,9 +291,12 @@ const AddNewExpense = () => {
     fd.append('expenses_type', selectedType);
     fd.append('claim_amount', claimAmount);
     fd.append('date', expenseDate);
+    fd.append('night_halt', nightHalt as string);
     if (startKm) fd.append('start_km', startKm);
     if (stopKm) fd.append('stop_km', stopKm);
     if (showKmFields) fd.append('total_km', String(totalKm));
+    fd.append('from', expenseFrom.trim());
+    fd.append('to', expenseTo.trim());
     fd.append('note', note.trim());
     attachments.forEach((attachment, index) => {
       if (attachment?.uri) {
@@ -371,6 +394,27 @@ const AddNewExpense = () => {
             </View>
           )}
 
+          <AppText size={16} color="#000000" family="InterSemiBold">Night Halt *</AppText>
+          <View style={styles.radioGroup}>
+            {([
+              { label: 'Yes', value: '1' },
+              { label: 'No', value: '0' },
+            ] as const).map((option) => (
+              <Pressable
+                key={option.value}
+                style={styles.radioOption}
+                onPress={() => setNightHalt(option.value)}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: nightHalt === option.value }}
+              >
+                <View style={[styles.radioCircle, nightHalt === option.value && styles.radioCircleSelected]}>
+                  {nightHalt === option.value && <View style={styles.radioDot} />}
+                </View>
+                <AppText size={14} color="#000000" family="InterRegular">{option.label}</AppText>
+              </Pressable>
+            ))}
+          </View>
+
           <AppText size={16} color="#000000" family="InterSemiBold">Rate</AppText>
           <TextInput
             style={[styles.input, styles.disabledInput]}
@@ -417,6 +461,26 @@ const AddNewExpense = () => {
             value={claimAmount}
             onChangeText={(text) => setClaimAmount(normalizeNumericInput(text))}
             editable={!isAutoClaimAmount}
+          />
+
+          <AppText size={16} color="#000000" family="InterSemiBold">From *</AppText>
+          <TextInput
+            style={styles.input}
+            placeholder="Enter starting location"
+            placeholderTextColor="#718096"
+            value={expenseFrom}
+            onChangeText={setExpenseFrom}
+            autoCapitalize="words"
+          />
+
+          <AppText size={16} color="#000000" family="InterSemiBold">To *</AppText>
+          <TextInput
+            style={styles.input}
+            placeholder="Enter destination"
+            placeholderTextColor="#718096"
+            value={expenseTo}
+            onChangeText={setExpenseTo}
+            autoCapitalize="words"
           />
 
           <AppText size={16} color="#000000" family="InterSemiBold">Note *</AppText>
