@@ -151,7 +151,14 @@ const ProfileTab = ({ handleDrawerClose }: any) => {
           <View style={[styles.header, styles.row, {}]}>
             <Pressable style={{ alignItems: 'center', flexDirection: "row", gap: 20 }} onPress={handleDrawerClose}>
               <BackIcon size={28} color="white" />
-              <LogoIcon />
+              <View style={styles.headerLogoContainer}>
+                <LogoIcon />
+                <Image
+                  source={require('../../assets/images/duke_logo_new.png')}
+                  style={styles.dukeLogo}
+                  resizeMode="contain"
+                />
+              </View>
             </Pressable>
             <View style={[styles.row, styles.button]}>
               <AppText size={12} color='white' family='InterMedium'>Good Day</AppText>

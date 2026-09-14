@@ -1,4 +1,4 @@
-import { View, ScrollView, StatusBar, Switch, FlatList, Pressable, TouchableOpacity, Modal, useWindowDimensions, Modal as RNModal, TextInput, ActivityIndicator, Alert, TouchableWithoutFeedback, KeyboardAvoidingView, Platform, } from 'react-native'
+import { View, ScrollView, StatusBar, Switch, FlatList, Pressable, TouchableOpacity, Modal, useWindowDimensions, Modal as RNModal, TextInput, ActivityIndicator, Alert, TouchableWithoutFeedback, KeyboardAvoidingView, Platform, Image, } from 'react-native'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { styles } from './styles'
 import { rw } from '../../utils/responsive'
@@ -764,9 +764,16 @@ const Home = () => {
             <View style={styles.blueContaier} />
             <SafeAreaView style={{ flex: 1 }} edges={['top']}>
               <View style={[styles.header, styles.row]}>
-                <Pressable onPress={handleDrawerPress}>
-                  <LogoIcon />
-                </Pressable>
+                <View style={styles.headerLogoContainer}>
+                  <Pressable onPress={handleDrawerPress}>
+                    <LogoIcon />
+                  </Pressable>
+                  <Image
+                    source={require('../../assets/images/duke_logo_new.png')}
+                    style={styles.dukeLogo}
+                    resizeMode="contain"
+                  />
+                </View>
                 <View style={[styles.row, styles.button]}>
                   <Pressable
                     style={styles.applyLeaveButton}

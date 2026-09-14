@@ -22,6 +22,15 @@ export const styles = StyleSheet.create({
         height: 64,
         justifyContent: 'space-between',
     },
+    headerLogoContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    dukeLogo: {
+        width: 52,
+        height: 30,
+    },
     row: {
         flexDirection: "row",
         alignItems: 'center',
