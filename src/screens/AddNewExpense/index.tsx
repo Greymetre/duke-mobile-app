@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, PermissionsAndroid, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { Dropdown } from 'react-native-element-dropdown';
 import { Asset, launchCamera, launchImageLibrary } from 'react-native-image-picker';
+import ImageResizer from '@bam.tech/react-native-image-resizer';
 import Toast from 'react-native-toast-message';
 import { ArrowDownIcon, CalenderIcon } from '../../assets/svgs/SvgsFile';
 import { UploadIcon } from '../../assets/svgs/HomePageSvgs';
@@ -23,6 +24,14 @@ const formatLocalDate = (date: Date) => {
 const todayIso = () => formatLocalDate(new Date());
 const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024;
 const ALLOWED_ATTACHMENT_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
+const IMAGE_COMPRESSION_STEPS = [
+  { dimension: 2048, quality: 80 },
+  { dimension: 1600, quality: 65 },
+  { dimension: 1280, quality: 50 },
+  { dimension: 1024, quality: 35 },
+  { dimension: 800, quality: 25 },
+  { dimension: 640, quality: 15 },
+];
 const ALLOWANCE_TYPE = {
   TRAVELLING: '1',
   DAILY: '2',
@@ -180,26 +189,71 @@ const AddNewExpense = () => {
     setRate(normalizeNumericInput(String(selectedTypeItem.rate || '0')) || '0');
   }, [selectedTypeItem]);
 
-  const validateFiles = (files: Asset[]) => {
-    return files.filter((file) => {
+  const prepareFiles = async (files: Asset[]) => {
+    const preparedFiles: Asset[] = [];
+
+    for (const file of files) {
       const fileType = String(file.type || '').toLowerCase();
-      if (file.fileSize && file.fileSize > MAX_ATTACHMENT_SIZE) {
-        Toast.show({ type: 'error', text1: `${file.fileName || 'Attachment'} is more than 5 MB` });
-        return false;
-      }
       if (fileType && !ALLOWED_ATTACHMENT_TYPES.includes(fileType)) {
         Toast.show({ type: 'error', text1: `${file.fileName || 'Attachment'} type is not allowed` });
-        return false;
+        continue;
       }
-      return true;
-    });
+
+      if (!file.fileSize || file.fileSize <= MAX_ATTACHMENT_SIZE) {
+        preparedFiles.push(file);
+        continue;
+      }
+
+      if (!fileType.startsWith('image/') || !file.uri) {
+        Toast.show({ type: 'error', text1: `${file.fileName || 'Attachment'} is over 5 MB and cannot be compressed` });
+        continue;
+      }
+
+      try {
+        let compressedFile: Asset | null = null;
+
+        for (const step of IMAGE_COMPRESSION_STEPS) {
+          const result = await ImageResizer.createResizedImage(
+            file.uri,
+            step.dimension,
+            step.dimension,
+            'JPEG',
+            step.quality,
+            0,
+          );
+
+          compressedFile = {
+            ...file,
+            uri: result.uri,
+            fileSize: result.size,
+            width: result.width,
+            height: result.height,
+            type: 'image/jpeg',
+            fileName: `${(file.fileName || `expense-${Date.now()}`).replace(/\.[^/.]+$/, '')}.jpg`,
+          };
+
+          if (result.size <= MAX_ATTACHMENT_SIZE) break;
+        }
+
+        if (compressedFile && (compressedFile.fileSize || 0) <= MAX_ATTACHMENT_SIZE) {
+          preparedFiles.push(compressedFile);
+        } else {
+          Toast.show({ type: 'error', text1: `${file.fileName || 'Attachment'} could not be compressed below 5 MB` });
+        }
+      } catch (error) {
+        console.log('Expense attachment compression error:', error);
+        Toast.show({ type: 'error', text1: `Could not compress ${file.fileName || 'attachment'}` });
+      }
+    }
+
+    return preparedFiles;
   };
 
   const pickAttachmentFromGallery = () => {
     launchImageLibrary({
       mediaType: 'mixed',
       selectionLimit: 0,
-    }, (response) => {
+    }, async (response) => {
       if (response.didCancel) return;
       if (response.errorMessage) {
         Toast.show({ type: 'error', text1: response.errorMessage });
@@ -207,7 +261,7 @@ const AddNewExpense = () => {
       }
 
       const selectedFiles = response.assets || [];
-      const validFiles = validateFiles(selectedFiles);
+      const validFiles = await prepareFiles(selectedFiles);
 
       if (validFiles.length) {
         setAttachments((prev) => [...prev, ...validFiles]);
@@ -229,14 +283,14 @@ const AddNewExpense = () => {
     launchCamera({
       mediaType: 'photo',
       saveToPhotos: false,
-    }, (response) => {
+    }, async (response) => {
       if (response.didCancel) return;
       if (response.errorMessage) {
         Toast.show({ type: 'error', text1: response.errorMessage });
         return;
       }
 
-      const validFiles = validateFiles(response.assets || []);
+      const validFiles = await prepareFiles(response.assets || []);
       if (validFiles.length) {
         setAttachments((prev) => [...prev, ...validFiles]);
       }
@@ -512,7 +566,9 @@ const AddNewExpense = () => {
               {attachments.length || existingAttachments.length ? `${attachments.length + existingAttachments.length} attachment(s) selected` : 'Expense Attachment'}
             </AppText>
             <AppText size={12} color="#C25050" family="InterRegular" horizontal={6}>
-              {attachmentRequired ? 'Required · Images/PDF, max 5 MB each' : 'Images/PDF, max 5 MB each'}
+              {attachmentRequired
+                ? 'Required · Images/PDF, max 5 MB each · Large images auto-compressed'
+                : 'Images/PDF, max 5 MB each · Large images auto-compressed'}
             </AppText>
           </View>
         </View>
