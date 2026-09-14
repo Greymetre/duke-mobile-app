@@ -17,7 +17,6 @@ import { createMMKV } from 'react-native-mmkv';
 
 const LOCATION_SYNC_INTERVAL_MS = 3 * 60 * 1000;
 const ANDROID_PERMISSION_SETUP_SHOWN_KEY = 'android_live_location_permission_setup_shown_v1';
-const IOS_PERMISSION_SETUP_SHOWN_KEY = 'ios_live_location_permission_setup_shown_v1';
 
 const { LocationTracking, FieldKonnectNotifications } = NativeModules;
 const permissionStorage = createMMKV({ id: 'live-location-permission-storage' });
@@ -56,8 +55,8 @@ const configureGeolocation = () => {
 
   Geolocation.setRNConfiguration({
     skipPermissionRequests: false,
-    authorizationLevel: 'always',
-    enableBackgroundLocationUpdates: true,
+    authorizationLevel: Platform.OS === 'ios' ? 'whenInUse' : 'always',
+    enableBackgroundLocationUpdates: Platform.OS !== 'ios',
     locationProvider: 'auto',
   });
   configured = true;
@@ -246,6 +245,8 @@ const canCaptureNow = () => {
 };
 
 const captureIosLocation = async (force = false) => {
+  if (AppState.currentState !== 'active') return false;
+
   const state = getLiveLocationTrackingState();
   if (!state.active) return false;
   if (!force && !canCaptureNow()) return false;
@@ -330,24 +331,14 @@ const attachAppStateListener = () => {
       return;
     }
 
-    if (state === 'background') {
-      void captureIosLocation(false);
-      void syncPendingLocations();
-    }
+    // iOS is intentionally foreground-only. This keeps the public App Store
+    // build from collecting location after the user leaves the app.
+    stopIosTimer();
+    stopIosWatcher();
   });
 };
 
 export const runAndroidFirstTimeLiveLocationSetup = async () => {
-  if (Platform.OS === 'ios') {
-    if (permissionStorage.getBoolean(IOS_PERMISSION_SETUP_SHOWN_KEY)) return;
-
-    permissionStorage.set(IOS_PERMISSION_SETUP_SHOWN_KEY, true);
-    configureGeolocation();
-    await requestIosNotificationPermission();
-    await requestIosPermission();
-    return;
-  }
-
   if (Platform.OS !== 'android') return;
   if (permissionStorage.getBoolean(ANDROID_PERMISSION_SETUP_SHOWN_KEY)) return;
 
@@ -380,8 +371,6 @@ export const startLocationTrackingAfterPunchIn = async (userData?: unknown, toke
   }
 
   if (Platform.OS === 'ios') {
-    // iOS background location is best-effort. If the user force-kills from the app switcher,
-    // Apple may stop further updates until the app is opened again.
     starting = true;
     try {
       configureGeolocation();
@@ -399,10 +388,12 @@ export const startLocationTrackingAfterPunchIn = async (userData?: unknown, toke
       });
       attachNetInfoListener();
       attachAppStateListener();
-      startIosTimer();
-      startIosWatcher();
-      await captureIosLocation(shouldCaptureImmediately);
-      await syncPendingLocations();
+      if (AppState.currentState === 'active') {
+        startIosTimer();
+        startIosWatcher();
+        await captureIosLocation(shouldCaptureImmediately);
+        await syncPendingLocations();
+      }
       return true;
     } finally {
       starting = false;
