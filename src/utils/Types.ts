@@ -20,6 +20,8 @@ export type RootStackParamList = {
   ForceUpdateScreen: undefined;
   CreatePlan: undefined | { item: number | string };
   BottomTab: undefined;
+  NewComplaint: {complaintId?: number} | undefined;
+  ComplaintDetail: {complaintId: number};
   CreatePAC: undefined;
   PACDetails: { activityId: number };
   PACExecution: { activityId: number };

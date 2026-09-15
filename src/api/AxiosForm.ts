@@ -12,6 +12,7 @@ axiosClientForm.interceptors.request.use(async (config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  config.headers.Accept = "application/json";
   config.headers["Content-Type"] = "multipart/form-data";
   return config;
 });

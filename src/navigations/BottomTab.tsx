@@ -4,12 +4,12 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import CustomHeader from '../components/Header';
 import { SCREEN_WIDTH } from '../utils/misc';
 import { colors } from '../utils/Colors';
-import { ActiveHomeIcon, ActiveNewsletterIcon, ActiveReportTabIcon, HomeIcon, MessageIcon, NewsletterIcon, ReportTabIcon } from '../assets/svgs/BottomTabSvgs';
+import { ActiveHomeIcon, ActiveReportTabIcon, HomeIcon, MessageIcon, ReportTabIcon } from '../assets/svgs/BottomTabSvgs';
 import AppText from '../components/AppText/AppText';
 import Home from '../screens/Home';
 import OrderList from '../screens/OrderScreen';
-import News from '../screens/News';
 import PAC from '../screens/PAC';
+import Complaint, { ComplaintIcon } from '../screens/Complaint';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppSelector } from '../components/redux/Store';
 const Tab = createBottomTabNavigator();
@@ -99,11 +99,11 @@ const BottomTab = () => {
         ),
       }} /> */}
       <Tab.Screen
-        name="News"
-        component={News}
+        name="Complaint"
+        component={Complaint}
         options={{
           headerShown: false,
-          title: 'News',
+          title: 'Complaint',
           tabBarIcon: ({ focused }) => (
             <View
               style={{
@@ -119,13 +119,13 @@ const BottomTab = () => {
                 gap: 2,
               }}
             >
-              {focused ? <ActiveNewsletterIcon /> : <NewsletterIcon />}
+              <ComplaintIcon />
               <AppText
                 color={colors.blue}
                 family={focused ? 'InterRegular' : 'InterMedium'}
                 size={13}
               >
-                News
+                Complaint
               </AppText>
             </View>
           ),

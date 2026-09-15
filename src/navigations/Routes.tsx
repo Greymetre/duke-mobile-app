@@ -50,6 +50,8 @@ import Documents from '../screens/Documents';
 import CreatePAC from '../screens/PAC/CreatePAC';
 import PACDetails from '../screens/PAC/PACDetails';
 import PACExecution from '../screens/PAC/PACExecution';
+import NewComplaint from '../screens/Complaint/NewComplaint';
+import ComplaintDetail from '../screens/Complaint/ComplaintDetail';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -84,6 +86,8 @@ const Routes = () => {
         />
         <Stack.Screen name='AccountPendingScreen' component={AccountPendingScreen} />
         <Stack.Screen name='BottomTab' component={BottomTab} />
+        <Stack.Screen name='NewComplaint' component={NewComplaint} />
+        <Stack.Screen name='ComplaintDetail' component={ComplaintDetail} />
         <Stack.Screen name='CreatePAC' component={CreatePAC} />
         <Stack.Screen name='PACDetails' component={PACDetails} />
         <Stack.Screen name='PACExecution' component={PACExecution} />
