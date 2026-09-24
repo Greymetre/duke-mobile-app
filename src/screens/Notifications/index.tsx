@@ -39,10 +39,7 @@ const Notifications = () => {
     const model = notification.model?.trim().toLowerCase();
     const notificationType = notification.type?.trim().toLowerCase().replace(/[\s-]+/g, '_');
     if (model === 'general_notification') {
-      navigation.navigate('BottomTab', {
-        screen: 'News',
-        params: {selectedNotification: notification},
-      });
+      navigation.navigate('News', {selectedNotification: notification});
       return;
     }
     if (model === 'lead' || model === 'leads' || model === 'lead_notification') {

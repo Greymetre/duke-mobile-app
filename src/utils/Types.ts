@@ -82,6 +82,7 @@ export type RootStackParamList = {
   OpportunityList: undefined
   Documents: undefined
   TaskList: { initialTab?: 'lead' | 'management' } | undefined
+  News: { selectedNotification?: any } | undefined
 };
 
 export type AppTextProps = {

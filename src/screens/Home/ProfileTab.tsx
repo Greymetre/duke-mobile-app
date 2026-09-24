@@ -21,8 +21,8 @@ import Svg, { Path } from 'react-native-svg'
 
 const data = [
   { id: 1, icon: require('../../assets/images/HomeTabs/myprofile.png'), name: 'My Profile' },
-  { id: 2, name: 'Lead' },
-  { id: 8, name: 'Task' },
+  // { id: 2, name: 'Lead' },
+  // { id: 8, name: 'Task' },
   // { id: 2, icon:require('../../assets/images/HomeTabs/orderHistory.png'), name: 'Order History' },
   { id: 3, icon: require('../../assets/images/HomeTabs/report.png'), name: 'Report' },
   { id: 4, icon: require('../../assets/images/HomeTabs/documents.png'), name: 'Documents' },

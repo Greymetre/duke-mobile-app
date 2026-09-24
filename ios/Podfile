@@ -38,6 +38,16 @@ target 'FieldConnect' do
       # :ccache_enabled => true
     )
 
+    # Xcode 26+ only supports iOS 15.0+, but some pods (and their resource
+    # bundle targets) still declare older deployment targets.
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |build_configuration|
+        if build_configuration.build_settings['IPHONEOS_DEPLOYMENT_TARGET'].to_f < 15.1
+          build_configuration.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.1'
+        end
+      end
+    end
+
     installer.pods_project.targets.each do |target|
       next unless target.name == 'fmt'
 

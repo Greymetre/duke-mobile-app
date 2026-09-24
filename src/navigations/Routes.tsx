@@ -43,6 +43,7 @@ import CreateLead from '../screens/LeadKonnect/CreateLead';
 import LeadDetails from '../screens/LeadKonnect/LeadDetails';
 import EditLead from '../screens/LeadKonnect/EditLead';
 import TaskList from '../screens/TaskList';
+import News from '../screens/News';
 import OpportunityList from '../screens/LeadKonnect/OpportunityList';
 import CallHistory from '../screens/LeadKonnect/CallHistory';
 import CallDetails from '../screens/LeadKonnect/CallDetails';
@@ -251,6 +252,9 @@ const Routes = () => {
         <Stack.Screen name='TaskList' component={TaskList} options={{
           headerShown: true,
           title: 'Tasks'
+        }} />
+        <Stack.Screen name='News' component={News} options={{
+          headerShown: false,
         }} />
 
 

@@ -191,10 +191,10 @@ const News = () => {
         <View style={styles.headerTitle}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Back to home"
+            accessibilityLabel="Go back"
             hitSlop={10}
             style={styles.backButton}
-            onPress={() => navigation.navigate('Home')}>
+            onPress={() => navigation.goBack()}>
             <BackIcon />
           </Pressable>
           <AppText size={24} color="#FFF" family="InterBold">News</AppText>
