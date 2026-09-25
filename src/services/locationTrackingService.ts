@@ -28,7 +28,7 @@ let foregroundInterval: ReturnType<typeof setInterval> | null = null;
 let iosWatchId: number | null = null;
 let netInfoUnsubscribe: NetInfoSubscription | null = null;
 let appStateSubscription: { remove: () => void } | null = null;
-let backgroundPermissionAlertShown = false;
+let batteryOptimizationPrompted = false;
 
 type GeoPosition = {
   coords: {
@@ -98,32 +98,32 @@ const requestAndroidPermission = async () => {
     foreground[PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION] ===
     PermissionsAndroid.RESULTS.GRANTED;
   const hasForegroundLocation = hasFine || hasCoarse;
+  let hasBackgroundLocation = androidApiLevel() < 29;
 
   if (androidApiLevel() >= 29 && hasForegroundLocation) {
-    const hasBackground = await PermissionsAndroid.check(
+    hasBackgroundLocation = await PermissionsAndroid.check(
       PermissionsAndroid.PERMISSIONS.ACCESS_BACKGROUND_LOCATION,
     );
 
-    if (!hasBackground) {
+    if (!hasBackgroundLocation) {
       const background = await PermissionsAndroid.request(
         PermissionsAndroid.PERMISSIONS.ACCESS_BACKGROUND_LOCATION,
       );
-
-      if (
-        background !== PermissionsAndroid.RESULTS.GRANTED &&
-        !backgroundPermissionAlertShown
-      ) {
-        backgroundPermissionAlertShown = true;
-        Alert.alert(
-          'Background location required',
-          'For live tracking after punch-in, open app settings and set Location permission to "Allow all the time".',
-          [
-            { text: 'Later', style: 'cancel' },
-            { text: 'Open Settings', onPress: () => Linking.openSettings() },
-          ],
-        );
-      }
+      hasBackgroundLocation = background === PermissionsAndroid.RESULTS.GRANTED;
     }
+  }
+
+  if (!hasForegroundLocation || !hasBackgroundLocation) {
+    // "While using the app" is not accepted: tracking must keep running with
+    // the phone locked or the app closed, which needs "Allow all the time".
+    Alert.alert(
+      'Allow all the time required',
+      'Live tracking after punch-in needs Location permission set to "Allow all the time". Open app settings > Permissions > Location and select "Allow all the time".',
+      [
+        { text: 'Later', style: 'cancel' },
+        { text: 'Open Settings', onPress: () => Linking.openSettings() },
+      ],
+    );
   }
 
   if (androidApiLevel() >= 33) {
@@ -132,7 +132,56 @@ const requestAndroidPermission = async () => {
     );
   }
 
-  return hasForegroundLocation;
+  return hasForegroundLocation && hasBackgroundLocation;
+};
+
+// Battery optimisation lets Android / OEM battery savers kill the tracking
+// service while the phone is locked, so ask the user to turn it off. Opens the
+// settings list (Play-safe) instead of the restricted direct request dialog.
+const requestBatteryOptimizationExemption = async (force = false) => {
+  if (Platform.OS !== 'android' || !LocationTracking?.openBatteryOptimizationSettings) return;
+  if (batteryOptimizationPrompted && !force) return;
+
+  try {
+    if (await LocationTracking.isIgnoringBatteryOptimizations?.()) return;
+  } catch (error) {
+    devLog('Battery optimization check failed', error);
+  }
+  batteryOptimizationPrompted = true;
+
+  await new Promise<void>(resolve => {
+    Alert.alert(
+      'Turn off battery optimisation',
+      'To keep live tracking running while the phone is locked, open the list, select "All apps", find Fieldkonnect Duke and choose "Don\'t optimise".',
+      [
+        { text: 'Later', style: 'cancel', onPress: () => resolve() },
+        {
+          text: 'Open Settings',
+          onPress: () => {
+            LocationTracking.openBatteryOptimizationSettings().catch((error: unknown) => {
+              devLog('Battery optimization settings failed', error);
+            });
+            resolve();
+          },
+        },
+      ],
+      { cancelable: true, onDismiss: () => resolve() },
+    );
+  });
+};
+
+/**
+ * Checks everything live tracking needs before punch-in. Android punch-in is
+ * blocked until Location is set to "Allow all the time".
+ */
+export const ensureLiveLocationReady = async () => {
+  if (Platform.OS !== 'android') return true;
+
+  const granted = await requestAndroidPermission();
+  if (!granted) return false;
+
+  await requestBatteryOptimizationExemption(true);
+  return true;
 };
 
 const showAndroidSettingsGuide = () =>
@@ -353,6 +402,7 @@ export const startLocationTrackingAfterPunchIn = async (userData?: unknown, toke
   if (Platform.OS === 'android') {
     const granted = await requestAndroidPermission();
     if (!granted) return false;
+    await requestBatteryOptimizationExemption();
 
     const authToken = token || store.getState().auth?.token;
     if (!LocationTracking?.startLocationTrackingAfterPunchIn || !authToken) {

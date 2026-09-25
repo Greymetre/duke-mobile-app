@@ -10,6 +10,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.pm.ServiceInfo
 import android.location.Location
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
@@ -18,11 +19,18 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
 import android.os.Looper
+import android.os.PowerManager
+import android.provider.Settings
+import android.net.Uri
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.fieldkonnect.duke.MainActivity
 import com.fieldkonnect.duke.R
+import com.google.android.gms.location.LocationAvailability
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import org.json.JSONArray
@@ -40,6 +48,21 @@ class LocationForegroundService : Service() {
   private val mainHandler = Handler(Looper.getMainLooper())
   private var running = false
 
+  // Fused location updates keep arriving while the screen is locked / in Doze,
+  // unlike a Handler timer which is frozen while the CPU sleeps.
+  private val locationCallback = object : LocationCallback() {
+    override fun onLocationResult(result: LocationResult) {
+      result.locations.forEach { onLocationCaptured(it) }
+    }
+
+    override fun onLocationAvailability(availability: LocationAvailability) {
+      if (!availability.isLocationAvailable) {
+        Log.e(TAG, "Location unavailable (GPS/location may be switched off)")
+        updateNotification("Location is off. Turn on location to continue tracking.")
+      }
+    }
+  }
+
   private data class ApiResponse(
     val code: Int,
     val body: String,
@@ -51,6 +74,7 @@ class LocationForegroundService : Service() {
     workerThread = HandlerThread("FieldKonnectLocationWorker").also { it.start() }
     workerHandler = Handler(workerThread.looper)
     createNotificationChannel()
+    isRunning = true
   }
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -62,7 +86,11 @@ class LocationForegroundService : Service() {
           stopSelf()
           return START_NOT_STICKY
         }
-        ensureForeground("Stopping live location tracking")
+        if (!ensureForeground("Stopping live location tracking")) {
+          LocationStorage.setActive(this, false)
+          cancelWatchdog(this)
+          return START_NOT_STICKY
+        }
         stopTracking()
       }
       ACTION_SYNC -> {
@@ -70,12 +98,12 @@ class LocationForegroundService : Service() {
           stopSelf()
           return START_NOT_STICKY
         }
-        ensureForeground("Syncing pending live locations")
+        if (!ensureForeground("Syncing pending live locations")) return START_NOT_STICKY
         syncPendingLocations(stopIfInactive = true)
       }
       ACTION_CAPTURE_NOW -> {
-        ensureForeground("Capturing live location")
-        captureLocation(force = true)
+        if (!ensureForeground("Capturing live location")) return START_NOT_STICKY
+        captureLocation()
       }
       else -> startTracking(intent)
     }
@@ -85,7 +113,9 @@ class LocationForegroundService : Service() {
   override fun onBind(intent: Intent?): IBinder? = null
 
   override fun onDestroy() {
+    isRunning = false
     running = false
+    fusedLocationClient.removeLocationUpdates(locationCallback)
     mainHandler.removeCallbacksAndMessages(null)
     workerThread.quitSafely()
     super.onDestroy()
@@ -109,19 +139,24 @@ class LocationForegroundService : Service() {
     }
 
     LocationStorage.setActive(this, true, token, userData)
-    ensureForeground("Location tracking is active after punch-in.")
+    if (!ensureForeground("Location tracking is active after punch-in.")) return
     Log.d(TAG, "Foreground service started")
+    scheduleWatchdog(this)
 
-    if (!running) {
-      running = true
-      captureLocation(force = true)
-      scheduleNextCapture()
+    val lastCapturedAt = LocationStorage.lastCapturedAt(this)
+    val stale = lastCapturedAt > 0 && System.currentTimeMillis() - lastCapturedAt > STALE_AFTER_MS
+    if (!running || stale) {
+      if (stale) Log.d(TAG, "No location for too long; re-registering location updates")
+      running = startLocationUpdates()
+      captureLocation()
     }
   }
 
   private fun stopTracking() {
     Log.d(TAG, "Punch-out tracking stopped")
     running = false
+    fusedLocationClient.removeLocationUpdates(locationCallback)
+    cancelWatchdog(this)
     mainHandler.removeCallbacksAndMessages(null)
     syncPendingLocations(stopIfInactive = false) {
       LocationStorage.setActive(this, false)
@@ -130,61 +165,81 @@ class LocationForegroundService : Service() {
     }
   }
 
-  private fun ensureForeground(message: String) {
-    startForeground(NOTIFICATION_ID, notification(message))
+  /**
+   * Promote to a location foreground service. Returns false (and stops) when
+   * Android refuses, e.g. because location permission was revoked.
+   */
+  private fun ensureForeground(message: String): Boolean {
+    return try {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        startForeground(NOTIFICATION_ID, notification(message), ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
+      } else {
+        startForeground(NOTIFICATION_ID, notification(message))
+      }
+      true
+    } catch (error: Exception) {
+      Log.e(TAG, "Unable to start location foreground service", error)
+      running = false
+      stopSelf()
+      false
+    }
   }
 
-  private fun scheduleNextCapture() {
-    mainHandler.removeCallbacksAndMessages(null)
-    if (!LocationStorage.isActive(this)) return
-
-    mainHandler.postDelayed({
-      captureLocation(force = false)
-      scheduleNextCapture()
-    }, LOCATION_SYNC_INTERVAL_MS)
-  }
-
-  private fun captureLocation(force: Boolean) {
-    if (!LocationStorage.isActive(this)) return
-    val elapsed = System.currentTimeMillis() - LocationStorage.lastCapturedAt(this)
-    if (!force && elapsed < LOCATION_SYNC_INTERVAL_MS) return
-
+  private fun startLocationUpdates(): Boolean {
     if (!hasLocationPermission()) {
-      Log.e(TAG, "Location permission missing; cannot capture")
-      updateNotification("Location permission required")
-      return
+      Log.e(TAG, "Allow all the time location permission missing; cannot track")
+      updateNotification("Set Location permission to \"Allow all the time\"")
+      return false
     }
 
-    updateNotification("Capturing live location")
-    fusedLocationClient.getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, null)
-      .addOnSuccessListener { location ->
-        if (location != null) {
-          onLocationCaptured(location)
-        } else {
-          fusedLocationClient.lastLocation
-            .addOnSuccessListener { lastLocation ->
-              if (lastLocation != null) {
-                onLocationCaptured(lastLocation)
-              } else {
-                Log.e(TAG, "Location capture returned empty location")
-                updateNotification("Waiting for location")
-              }
-            }
-            .addOnFailureListener { error ->
-              Log.e(TAG, "Last location failed", error)
-              updateNotification("Location capture failed")
-            }
+    val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, LOCATION_SYNC_INTERVAL_MS)
+      .setMinUpdateIntervalMillis(LOCATION_SYNC_INTERVAL_MS)
+      .setMaxUpdateDelayMillis(0)
+      .setWaitForAccurateLocation(false)
+      .build()
+
+    return try {
+      fusedLocationClient.removeLocationUpdates(locationCallback)
+      fusedLocationClient.requestLocationUpdates(request, locationCallback, workerThread.looper)
+      true
+    } catch (error: SecurityException) {
+      Log.e(TAG, "Location updates refused", error)
+      updateNotification("Location permission required")
+      false
+    }
+  }
+
+  /** One immediate fresh fix (no stale cached location) right after punch-in / restart. */
+  private fun captureLocation() {
+    if (!LocationStorage.isActive(this) || !hasLocationPermission()) return
+
+    try {
+      fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+        .addOnSuccessListener { location ->
+          if (location != null) {
+            onLocationCaptured(location)
+          } else {
+            updateNotification("Waiting for location. Make sure location is on.")
+          }
         }
-      }
-      .addOnFailureListener { error ->
-        Log.e(TAG, "Location capture failed", error)
-        updateNotification("Location capture failed")
-      }
+        .addOnFailureListener { error ->
+          Log.e(TAG, "Location capture failed", error)
+          updateNotification("Location capture failed")
+        }
+    } catch (error: SecurityException) {
+      Log.e(TAG, "Location capture refused", error)
+    }
   }
 
   private fun onLocationCaptured(location: Location) {
-    LocationStorage.enqueue(this, location.latitude, location.longitude)
-    LocationStorage.markCaptured(this)
+    if (!LocationStorage.isActive(this)) return
+    // The immediate fix and the first periodic update can arrive together; the
+    // server drops points closer than ~3 minutes anyway, so keep only one.
+    val lastCapturedAt = LocationStorage.lastCapturedAt(this)
+    if (lastCapturedAt > 0 && location.time - lastCapturedAt < MIN_POINT_GAP_MS) return
+
+    LocationStorage.enqueue(this, location.latitude, location.longitude, LocationStorage.apiDateTime(java.util.Date(location.time)))
+    LocationStorage.markCaptured(this, location.time)
     Log.d(TAG, "Location captured: ${location.latitude}, ${location.longitude}")
     updateNotification("Location captured at ${LocationStorage.apiDateTime()}")
     syncPendingLocations(stopIfInactive = false)
@@ -192,7 +247,12 @@ class LocationForegroundService : Service() {
 
   private fun syncPendingLocations(stopIfInactive: Boolean, onComplete: (() -> Unit)? = null) {
     workerHandler.post {
+      // Keep the CPU awake until the upload finishes, even with the screen locked.
+      val wakeLock = (getSystemService(Context.POWER_SERVICE) as PowerManager)
+        .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "FieldKonnect:LocationSync")
+        .apply { setReferenceCounted(false); acquire(SYNC_WAKE_LOCK_TIMEOUT_MS) }
       val finish = {
+        if (wakeLock.isHeld) wakeLock.release()
         if (stopIfInactive && !LocationStorage.isActive(this)) stopSelf()
         onComplete?.let { callback -> mainHandler.post(callback) }
       }
@@ -332,7 +392,12 @@ class LocationForegroundService : Service() {
   }
 
   private fun notification(message: String): Notification {
-    val launchIntent = Intent(this, MainActivity::class.java)
+    val launchIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !hasLocationPermission()) {
+      Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null))
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    } else {
+      Intent(this, MainActivity::class.java)
+    }
     val pendingIntent = PendingIntent.getActivity(
       this,
       0,
@@ -384,19 +449,7 @@ class LocationForegroundService : Service() {
   }
 
   private fun scheduleServiceRestart() {
-    val intent = Intent(this, LocationForegroundService::class.java).setAction(ACTION_START)
-    val pendingIntent = PendingIntent.getService(
-      this,
-      101,
-      intent,
-      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-    )
-    val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-    alarmManager.setAndAllowWhileIdle(
-      AlarmManager.RTC_WAKEUP,
-      System.currentTimeMillis() + 2000,
-      pendingIntent,
-    )
+    scheduleWatchdog(this, RESTART_AFTER_TASK_REMOVED_MS)
   }
 
   companion object {
@@ -406,6 +459,11 @@ class LocationForegroundService : Service() {
     private const val NOTIFICATION_ID = 9301
     private const val API_RESULT_NOTIFICATION_ID_BASE = 9400
     private const val LOCATION_SYNC_INTERVAL_MS = 3 * 60 * 1000L
+    private const val MIN_POINT_GAP_MS = 170 * 1000L
+    private const val STALE_AFTER_MS = 10 * 60 * 1000L
+    private const val WATCHDOG_INTERVAL_MS = 10 * 60 * 1000L
+    private const val WATCHDOG_REQUEST_CODE = 102
+    private const val SYNC_WAKE_LOCK_TIMEOUT_MS = 60 * 1000L
     private const val LOG_BODY_LIMIT = 500
     private const val NOTIFICATION_BODY_LIMIT = 220
 
@@ -415,5 +473,38 @@ class LocationForegroundService : Service() {
     const val ACTION_CAPTURE_NOW = "com.fieldkonnect.duke.location.CAPTURE_NOW"
     const val EXTRA_TOKEN = "token"
     const val EXTRA_USER_DATA = "userData"
+    private const val RESTART_AFTER_TASK_REMOVED_MS = 2000L
+
+    /** True while this service instance is alive in the current process. */
+    @Volatile
+    var isRunning = false
+      private set
+
+    private fun watchdogIntent(context: Context): PendingIntent =
+      PendingIntent.getBroadcast(
+        context,
+        WATCHDOG_REQUEST_CODE,
+        Intent(context, LocationWatchdogReceiver::class.java),
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+      )
+
+    /**
+     * Wake up after [delayMs] (even in Doze) and let [LocationWatchdogReceiver]
+     * restart tracking if the OS / OEM battery manager killed the service while
+     * the user is still punched in.
+     */
+    fun scheduleWatchdog(context: Context, delayMs: Long = WATCHDOG_INTERVAL_MS) {
+      val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+      alarmManager.setAndAllowWhileIdle(
+        AlarmManager.RTC_WAKEUP,
+        System.currentTimeMillis() + delayMs,
+        watchdogIntent(context),
+      )
+    }
+
+    fun cancelWatchdog(context: Context) {
+      val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+      alarmManager.cancel(watchdogIntent(context))
+    }
   }
 }

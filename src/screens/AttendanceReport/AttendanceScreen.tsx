@@ -35,7 +35,7 @@ import { Dropdown } from 'react-native-element-dropdown';
 import ActionSheet, { ActionSheetRef, FlatList as ActionSheetFlatList } from 'react-native-actions-sheet';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import useLocationHook from '../../api/hooks/uselocationhook';
-import { startLiveLocationTracking, stopLiveLocationTracking } from '../../services/liveLocationService';
+import { ensureLiveLocationReady, startLiveLocationTracking, stopLiveLocationTracking } from '../../services/liveLocationService';
 import { getTourObjectivesApi, normalizeTourObjectives } from '../../api/query/TourPlanApi';
 import { useFocusEffect } from '@react-navigation/native';
 
@@ -531,6 +531,14 @@ const AttendanceScreen: React.FC<{ navigation: any; route: any }> = ({ navigatio
       }
       if (selectedCities.length === 0) {
         Toast.show({ type: 'error', text1: 'Please select at least one city' });
+        return;
+      }
+      if (!(await ensureLiveLocationReady())) {
+        Toast.show({
+          type: 'error',
+          text1: 'Allow all the time location required',
+          text2: 'Set Location permission to "Allow all the time" to punch in.',
+        });
         return;
       }
     }

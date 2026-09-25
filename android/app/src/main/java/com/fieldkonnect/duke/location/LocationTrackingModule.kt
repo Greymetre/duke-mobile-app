@@ -1,6 +1,11 @@
 package com.fieldkonnect.duke.location
 
+import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -95,4 +100,41 @@ class LocationTrackingModule(private val reactContext: ReactApplicationContext) 
     }
   }
 
+  @ReactMethod
+  fun isIgnoringBatteryOptimizations(promise: Promise) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+      promise.resolve(true)
+      return
+    }
+    val powerManager = reactContext.getSystemService(Context.POWER_SERVICE) as PowerManager
+    promise.resolve(powerManager.isIgnoringBatteryOptimizations(reactContext.packageName))
+  }
+
+  /**
+   * Opens the system battery optimisation list so the user can set the app to
+   * "Don't optimise". Uses the settings screen instead of the direct request
+   * dialog, which needs a Play-restricted permission.
+   */
+  @ReactMethod
+  fun openBatteryOptimizationSettings(promise: Promise) {
+    try {
+      if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+        promise.resolve(true)
+        return
+      }
+      val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      if (intent.resolveActivity(reactContext.packageManager) != null) {
+        reactContext.startActivity(intent)
+      } else {
+        reactContext.startActivity(
+          Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${reactContext.packageName}"))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+      }
+      promise.resolve(true)
+    } catch (error: Exception) {
+      promise.reject("battery_optimization_failed", error)
+    }
+  }
 }

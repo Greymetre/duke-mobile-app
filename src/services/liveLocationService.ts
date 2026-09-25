@@ -1,4 +1,5 @@
 export {
+  ensureLiveLocationReady,
   getTrackingStatus,
   initializeLiveLocationTracking,
   removeLiveLocationListeners,

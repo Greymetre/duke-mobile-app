@@ -395,6 +395,16 @@ const Home = () => {
   const isDistributorType = (title: string) =>
     title?.toLowerCase?.().includes('distributor');
 
+  // Dealer & Distributor cannot be created from the mobile app
+  const isHiddenForCreate = (type: CustomerTypeItem) => {
+    const label = `${type.title} ${type.value}`.toLowerCase();
+    return label.includes('dealer') || label.includes('distributor');
+  };
+
+  const visibleCustomerTypes = pressType == 'add'
+    ? customerTypes.filter((type) => !isHiddenForCreate(type))
+    : customerTypes;
+
   const handleSelectType = (type: CustomerTypeItem) => {
     actionSheetRef.current?.hide();
     console.log('Selected customer type:', type);
@@ -1322,8 +1332,8 @@ const Home = () => {
             <View style={{ paddingVertical: 24, alignItems: 'center' }}>
               <ActivityIndicator color={colors.blue} />
             </View>
-          ) : customerTypes.length ? (
-            customerTypes.map((type) => {
+          ) : visibleCustomerTypes.length ? (
+            visibleCustomerTypes.map((type) => {
               const Icon = isDistributorType(type.value) ? <FirstUserIcon /> : <SecondUserIcon />;
 
               return (
