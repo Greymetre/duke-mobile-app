@@ -397,8 +397,8 @@ const Home = () => {
 
   // Dealer & Distributor cannot be created from the mobile app
   const isHiddenForCreate = (type: CustomerTypeItem) => {
-    const label = `${type.title} ${type.value}`.toLowerCase();
-    return label.includes('dealer') || label.includes('distributor');
+    const label = String(type.value || type.title).trim().toLowerCase();
+    return label === 'dealer' || label === 'distributor';
   };
 
   const visibleCustomerTypes = pressType == 'add'

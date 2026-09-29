@@ -40,13 +40,13 @@
 		<true/>
 	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>This app needs camera access to take photos</string>
+	<string>FieldKonnect uses the camera to capture photos for your field records. For example, you can take a photo of a customer's shop when adding a new customer, or photograph a bill when submitting an expense claim.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>FieldKonnect uses your location while the app is open to record attendance, visit locations, and field activity.</string>
+	<string>FieldKonnect uses your location while the app is open to record attendance, visit locations, and field activity. For example, your location is saved when you mark attendance or check in at a customer's shop.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>This app needs to save photos to your library.</string>
+	<string>FieldKonnect saves photos you capture in the app to your photo library. For example, a shop photo taken while adding a customer is saved so you can view it later.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>This app needs photo access to take photos</string>
+	<string>FieldKonnect accesses your photo library so you can attach existing photos to your records. For example, you can select a bill photo for an expense claim, a product photo for a service complaint, a customer's shop photo, or your profile picture.</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UIAppFonts</key>
