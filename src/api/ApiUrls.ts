@@ -62,6 +62,7 @@ export const API_ENDPOINT = {
   // Expense APIs
   GET_EXPENSES_TYPE: "api/getExpensesType",
   CREATE_EXPENSE: "api/createExpense",
+  CREATE_MULTIPLE_EXPENSE: "api/createMultipleExpense",
   UPDATE_EXPENSE: "api/updateExpense",
   EXPENSE_LISTING: "api/expenseListing",
   ALL_EXPENSE_LISTING: "api/allExpenseListing",

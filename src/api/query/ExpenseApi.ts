@@ -34,6 +34,9 @@ export const getExpenseDetailsApi = (expenseId: string | number) =>
 export const createExpenseApi = (payload: FormData) =>
   axiosClientForm.post(API_ENDPOINT.CREATE_EXPENSE, payload);
 
+export const createMultipleExpenseApi = (payload: FormData) =>
+  axiosClientForm.post(API_ENDPOINT.CREATE_MULTIPLE_EXPENSE, payload);
+
 export const updateExpenseApi = (payload: FormData) =>
   axiosClientForm.post(API_ENDPOINT.UPDATE_EXPENSE, payload);
 
