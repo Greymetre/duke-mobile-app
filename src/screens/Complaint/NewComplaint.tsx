@@ -133,7 +133,7 @@ const NewComplaint = ({navigation, route}: any) => {
           setReceivedThrough(throughOptions.find((item: Option) => Number(item.id) === Number(detail.complaint_received_through_id)) || null);
         }
       })
-      .catch(() => Alert.alert('Unable to load form', 'Dealer and category data could not be loaded.'))
+      .catch(() => Alert.alert('Unable to load form', 'Dealer/distributor and category data could not be loaded.'))
       .finally(() => setLoadingOptions(false));
   }, [complaintId]);
 
@@ -145,7 +145,7 @@ const NewComplaint = ({navigation, route}: any) => {
 
   const submitComplaint = async () => {
     if (!dealer || !category || !receivedThrough || !description.trim()) {
-      Alert.alert('Required fields', 'Please select dealer, product category, complaint received through and enter nature of complaint.');
+      Alert.alert('Required fields', 'Please select dealer/distributor, product category, complaint received through and enter nature of complaint.');
       return;
     }
     if ([alternateNumber, endUserMobile, technicianMobile].some(number => number && number.length !== 10)) {
@@ -204,9 +204,9 @@ const NewComplaint = ({navigation, route}: any) => {
         </Section>
 
         <Section icon="▤" title="Complaint Received From">
-          {loadingOptions ? <ActivityIndicator color={colors.blue} /> : <SelectField label="Dealer Name" value={dealer?.name || ''} options={dealers} onSelect={setDealer} />}
-          <Field label="Address" value={dealer?.address || ''} editable={false} placeholder="Select a dealer to view address" />
-          <Field label="Contact No." value={dealer?.contact || ''} editable={false} placeholder="Select a dealer to view contact" />
+          {loadingOptions ? <ActivityIndicator color={colors.blue} /> : <SelectField label="Dealer / Distributor Name" value={dealer?.name || ''} options={dealers} onSelect={setDealer} />}
+          <Field label="Address" value={dealer?.address || ''} editable={false} placeholder="Select a dealer/distributor to view address" />
+          <Field label="Contact No." value={dealer?.contact || ''} editable={false} placeholder="Select a dealer/distributor to view contact" />
           <Field label="Alternate Number" value={alternateNumber} onChangeText={limitPhone(setAlternateNumber)} placeholder="Optional" keyboardType="phone-pad" />
         </Section>
 
