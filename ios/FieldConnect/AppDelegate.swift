@@ -26,15 +26,22 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
 
     UNUserNotificationCenter.current().delegate = self
 
-    window = UIWindow(frame: UIScreen.main.bounds)
-
-    factory.startReactNative(
-      withModuleName: "FieldConnect",
-      in: window,
-      launchOptions: launchOptions
-    )
-
+    // The window is created by SceneDelegate. iOS 27+ refuses to launch apps
+    // built with the latest SDK that don't adopt the UIScene life cycle.
     return true
+  }
+
+  func application(
+    _ application: UIApplication,
+    configurationForConnecting connectingSceneSession: UISceneSession,
+    options: UIScene.ConnectionOptions
+  ) -> UISceneConfiguration {
+    let configuration = UISceneConfiguration(
+      name: "Default Configuration",
+      sessionRole: connectingSceneSession.role
+    )
+    configuration.delegateClass = SceneDelegate.self
+    return configuration
   }
 
   func userNotificationCenter(
@@ -47,6 +54,33 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     } else {
       completionHandler([.alert, .sound])
     }
+  }
+}
+
+class SceneDelegate: UIResponder, UIWindowSceneDelegate {
+  var window: UIWindow?
+
+  func scene(
+    _ scene: UIScene,
+    willConnectTo session: UISceneSession,
+    options connectionOptions: UIScene.ConnectionOptions
+  ) {
+    guard
+      let windowScene = scene as? UIWindowScene,
+      let appDelegate = UIApplication.shared.delegate as? AppDelegate,
+      let factory = appDelegate.reactNativeFactory
+    else { return }
+
+    let window = UIWindow(windowScene: windowScene)
+    self.window = window
+    // Some native modules still look up the window through the app delegate.
+    appDelegate.window = window
+
+    factory.startReactNative(
+      withModuleName: "FieldConnect",
+      in: window,
+      launchOptions: nil
+    )
   }
 }
 
