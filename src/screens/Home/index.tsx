@@ -175,12 +175,19 @@ const Home = () => {
     // { label: 'Leave', value: 'Leave' },
   ];
 
-  const casualBalance = Number(leaveBalances?.casual ?? 0);
-  const compOffBalance = Number(leaveBalances?.comp_off ?? 0);
-  const balanceTypes = [
-    { label: `Casual Leave (${casualBalance})`, value: 'casual' },
-    { label: `Comp-off (${compOffBalance})`, value: 'comp_off' },
-  ];
+  // Balance types come from leaves/balance; `value` is sent as bal_type to addLeaves.
+  // Fallback covers servers that don't return leave_types yet.
+  const leaveTypeOptions: { value: string; label: string; balance: number; check_balance: boolean }[] =
+    Array.isArray(leaveBalances?.leave_types) && leaveBalances.leave_types.length > 0
+      ? leaveBalances.leave_types
+      : [
+        { value: 'Casual Balance', label: 'Casual Leave', balance: Number(leaveBalances?.casual ?? 0), check_balance: true },
+        { value: 'Comp-off Balance', label: 'Comp-off', balance: Number(leaveBalances?.comp_off ?? 0), check_balance: true },
+      ];
+  const balanceTypes = leaveTypeOptions.map(option => ({
+    label: option.check_balance ? `${option.label} (${Number(option.balance ?? 0)})` : option.label,
+    value: option.value,
+  }));
   // Your token – in real app use secure storage / redux / context
 
   const fetchPunchInStatus = async () => {
@@ -323,10 +330,10 @@ const Home = () => {
       return;
     }
     const requiredBalance = isHalfDay ? 0.5 : inclusiveDays;
-    const availableBalance = selectedBalType === 'comp_off' ? compOffBalance : casualBalance;
-    if (availableBalance < requiredBalance) {
-      const balanceLabel = selectedBalType === 'comp_off' ? 'Comp-off' : 'Casual Leave';
-      const message = `Insufficient ${balanceLabel} balance. Available: ${availableBalance}, Required: ${requiredBalance}`;
+    const selectedOption = leaveTypeOptions.find(option => option.value === selectedBalType);
+    const availableBalance = Number(selectedOption?.balance ?? 0);
+    if (selectedOption?.check_balance && availableBalance < requiredBalance) {
+      const message = `Insufficient ${selectedOption.label} balance. Available: ${availableBalance}, Required: ${requiredBalance}`;
       setErrorLeave(message);
       Toast.show({ type: 'error', text1: message });
       return;
@@ -342,9 +349,7 @@ const Home = () => {
         from_date: fromDate.toISOString().split('T')[0],
         to_date: toDate.toISOString().split('T')[0],
         type: selectedType,
-        // addLeaves validates these exact display values, while the balance
-        // endpoint uses the canonical keys casual and comp_off.
-        bal_type: selectedBalType === 'comp_off' ? 'Comp-off Balance' : 'Casual Balance',
+        bal_type: selectedBalType,
         reason: reason.trim(),
       };
 
