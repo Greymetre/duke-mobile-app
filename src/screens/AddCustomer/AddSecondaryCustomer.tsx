@@ -51,6 +51,7 @@ import { fonts } from '../../utils/typography';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ImageCropPicker from 'react-native-image-crop-picker';
 import { useFocusEffect } from '@react-navigation/native';
+import { isSecurityChequeType } from '../../utils/customerType';
 
 const requestPermissions = async () => {
   if (Platform.OS !== 'android') return true;
@@ -173,6 +174,9 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
   const [isRetailerCustomer, setIsRetailerCustomer] = useState(
     resolvedCustomerType.includes('retailer'),
   );
+  const isChequeCustomer = isSecurityChequeType(
+    route?.params?.customerTypeKey || existingCustomer?.customer_type_key,
+  );
 
   const [formData, setFormData] = useState<any>({
     type,
@@ -197,6 +201,9 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
     gst_attachment: null,
     pan_attachment: null,
     bank_proof: null,
+    security_cheques: [] as any[],
+    existing_security_cheques: [] as any[],
+    remove_security_cheques: [] as string[],
     aadhar: null,
     gst_number: '',
     pan_number: '',
@@ -555,6 +562,43 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
       includeBase64: false,
     };
 
+    // Security cheques are a list: gallery allows picking several at once, camera adds one (cropped)
+    if (currentUploadField === 'security_cheques') {
+      const addCheques = (assets: any[]) =>
+        setFormData((prev: any) => ({ ...prev, security_cheques: [...(prev.security_cheques || []), ...assets] }));
+      const chequePicker = fromCamera ? launchCamera : launchImageLibrary;
+      chequePicker(fromCamera ? options : { ...options, selectionLimit: 0 }, async (response: ImagePickerResponse) => {
+        if (response.didCancel || response.errorCode || !response.assets?.length) return;
+        if (!fromCamera) {
+          addCheques(response.assets);
+          return;
+        }
+        const asset = response.assets[0];
+        try {
+          const cropped = await ImageCropPicker.openCropper({
+            path: asset.uri!,
+            width: 1200,
+            height: 1200,
+            cropping: true,
+            freeStyleCropEnabled: true,
+            compressImageQuality: 0.85,
+            compressImageMaxWidth: 1200,
+            compressImageMaxHeight: 1200,
+            forceJpg: true,
+            mediaType: 'photo',
+          });
+          addCheques([{
+            uri: cropped.path,
+            type: cropped.mime || 'image/jpeg',
+            fileName: cropped.filename || `cheque_${Date.now()}.jpg`,
+          }]);
+        } catch (cropError: any) {
+          addCheques([asset]);
+        }
+      });
+      return;
+    }
+
     const picker = fromCamera ? launchCamera : launchImageLibrary;
     picker(options, async (response: ImagePickerResponse) => {
       // if (response.didCancel || response.errorCode) return;
@@ -610,6 +654,95 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
       }
 
     });
+  };
+
+  const removeNewCheque = (index: number) =>
+    setFormData((prev: any) => ({
+      ...prev,
+      security_cheques: prev.security_cheques.filter((_: any, i: number) => i !== index),
+    }));
+
+  const toggleExistingChequeRemoval = (id: any) =>
+    setFormData((prev: any) => {
+      const key = String(id);
+      const removed = prev.remove_security_cheques || [];
+      return {
+        ...prev,
+        remove_security_cheques: removed.includes(key)
+          ? removed.filter((value: string) => value !== key)
+          : [...removed, key],
+      };
+    });
+
+  const renderChequeTile = (key: string, uri: string, onRemove: () => void, marked = false) => (
+    <View key={key} style={{ width: '31%', marginBottom: 12 }}>
+      <View style={{ height: 100, borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: '#CBD5E1' }}>
+        <FastImage source={{ uri }} style={{ width: '100%', height: '100%', opacity: marked ? 0.3 : 1 }} resizeMode="cover" />
+        <TouchableOpacity
+          onPress={onRemove}
+          style={{
+            position: 'absolute',
+            top: 6,
+            right: 6,
+            backgroundColor: marked ? '#22C55E' : 'rgba(220,38,38,0.85)',
+            borderRadius: 14,
+            width: 28,
+            height: 28,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {marked
+            ? <AppText size={12} color="white" family="InterBold">Undo</AppText>
+            : <MinusIcon width={14} height={14} fill="white" />}
+        </TouchableOpacity>
+      </View>
+      {marked && (
+        <AppText size={11} color="red" align="center" style={{ marginTop: 4 }}>Will be removed</AppText>
+      )}
+    </View>
+  );
+
+  const SecurityChequeSection = () => {
+    const existing = formData.existing_security_cheques || [];
+    const added = formData.security_cheques || [];
+    return (
+      <View style={{ width: '100%', marginBottom: 16 }}>
+        <AppText size={14} color={colors.black} family="InterMedium">
+          Security Cheque (optional, multiple)
+        </AppText>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: '3.5%', marginTop: 8 }}>
+          {existing.map((cheque: any) =>
+            renderChequeTile(
+              `existing-${cheque.id}`,
+              resolveMediaUrl(cheque.file_path),
+              () => toggleExistingChequeRemoval(cheque.id),
+              (formData.remove_security_cheques || []).includes(String(cheque.id)),
+            ),
+          )}
+          {added.map((asset: any, index: number) =>
+            renderChequeTile(`new-${index}-${asset.uri}`, asset.uri, () => removeNewCheque(index)),
+          )}
+          <TouchableOpacity
+            onPress={() => openUploadSheet('security_cheques', 'Security Cheque')}
+            style={{
+              width: '31%',
+              height: 100,
+              borderWidth: 1.5,
+              borderColor: '#CBD5E1',
+              borderStyle: 'dashed',
+              borderRadius: 10,
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 4,
+            }}
+          >
+            <UploadIcon width={28} height={28} />
+            <AppText size={12} color="#64748B" family="InterMedium" align="center">Add Cheque</AppText>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
   };
 
   const ImageUploadBox = ({ label, value, field, required = false, existingUri }: any) => {
@@ -764,7 +897,20 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
     addPhoto('shopimage', formData.shop_photo);
     addPhoto('gstin_image', formData.gst_attachment);
     addPhoto('pan_image', formData.pan_attachment);
-    addPhoto('other_image', formData.bank_proof);
+    if (isChequeCustomer) {
+      (formData.security_cheques || []).forEach((asset: any, index: number) => {
+        if (asset?.uri) {
+          fd.append('security_cheques[]', {
+            uri: asset.uri,
+            name: asset.fileName || `cheque_${Date.now()}_${index}.jpg`,
+            type: asset.type || 'image/jpeg',
+          } as any);
+        }
+      });
+      appendIfPresent('remove_security_cheques', (formData.remove_security_cheques || []).join(','));
+    } else {
+      addPhoto('bank_proof', formData.bank_proof);
+    }
     addPhoto('aadhar', formData.aadhar);
 
     return fd;
@@ -894,6 +1040,9 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
         gst_attachment: existingCustomer.gst_attachment ? { uri: resolveMediaUrl(existingCustomer.gst_attachment) } : null,
         pan_attachment: existingCustomer.pan_attachment ? { uri: resolveMediaUrl(existingCustomer.pan_attachment) } : null,
         bank_proof: existingCustomer.bank_proof ? { uri: resolveMediaUrl(existingCustomer.bank_proof) } : null,
+        security_cheques: [],
+        existing_security_cheques: Array.isArray(existingCustomer.security_cheques) ? existingCustomer.security_cheques : [],
+        remove_security_cheques: [],
         aadhar: existingCustomer.aadhar ? { uri: resolveMediaUrl(existingCustomer.aadhar) } : null,
         pan_number: existingCustomer.pan_number || existingCustomer.pan_no || details.pan_no || '',
         bank_account_type: normalizeBankAccountType(existingCustomer.bank_account_type),
@@ -1277,18 +1426,21 @@ const AddSecondaryCustomer = ({ navigation, route }: any) => {
                   value={formData.pan_attachment}
                   existingUri={isEdit ? formData.pan_attachment?.uri : null}
                 />
-                <ImageUploadBox
-                  label="Bank Proof / Cheque (optional)"
-                  field="bank_proof"
-                  value={formData.bank_proof}
-                  existingUri={isEdit ? formData.bank_proof?.uri : null}
-                />
+                {!isChequeCustomer && (
+                  <ImageUploadBox
+                    label="Bank Proof / Cheque (optional)"
+                    field="bank_proof"
+                    value={formData.bank_proof}
+                    existingUri={isEdit ? formData.bank_proof?.uri : null}
+                  />
+                )}
                 <ImageUploadBox
                   label="Aadhaar Card (optional)"
                   field="aadhar"
                   value={formData.aadhar}
                   existingUri={isEdit ? formData.aadhar?.uri : null}
                 />
+                {isChequeCustomer && <SecurityChequeSection />}
               </View>
             </AccordionSection>
 

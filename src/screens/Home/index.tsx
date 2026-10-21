@@ -50,6 +50,7 @@ interface CustomerTypeItem {
   title: string;
   value: string;
   customerTypeId: string;
+  customerTypeKey: string;
 }
 
 const Home = () => {
@@ -419,6 +420,7 @@ const Home = () => {
         type: type.value,
         customerTypeId: type.customerTypeId,
         customerTypeName: type.title,
+        customerTypeKey: type.customerTypeKey,
       })
     } else {
       navigation.navigate("CustomerList", {
@@ -580,6 +582,7 @@ const Home = () => {
           title,
           value,
           customerTypeId: String(item?.id ?? item?.customer_type_id ?? item?.customertype ?? item?.value ?? ''),
+          customerTypeKey: String(item?.type_name ?? '').trim().toLowerCase(),
         };
       })
       .filter((item): item is CustomerTypeItem => Boolean(item?.customerTypeId));

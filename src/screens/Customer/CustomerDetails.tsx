@@ -16,6 +16,7 @@ import useLocationHook from '../../api/hooks/uselocationhook'
 import Gallery, { GalleryRef } from 'react-native-awesome-gallery'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { formatMobileNumberList, normalizeIndianMobileNumber } from '../../utils/phone'
+import { isSecurityChequeType } from '../../utils/customerType'
 
 type CustomerDetailsProps = {
   navigation: any
@@ -130,6 +131,8 @@ const CustomerDetails = ({ navigation, route }: CustomerDetailsProps) => {
             gst_attachment: data?.gst_attachment || customerDocuments.gstin || customerDocuments.gst || null,
             pan_attachment: data?.pan_attachment || customerDocuments.pan || null,
             bank_proof: data?.bank_proof || customerDocuments.bankpass || customerDocuments.bankproof || null,
+            customer_type_key: data?.customer_type_key || '',
+            security_cheques: Array.isArray(data?.security_cheques) ? data.security_cheques : [],
             aadhar: data?.aadhar || details?.aadhar || customerDocuments.aadhar || customerDocuments.aadhaar || null,
             aadhar_back: customerDocuments.aadharback || customerDocuments.aadhaarback || null,
             remark: data?.remark || '',
@@ -264,7 +267,14 @@ const CustomerDetails = ({ navigation, route }: CustomerDetailsProps) => {
     { key: 'owner-photo', label: 'Owner Photo', value: customerData?.owner_photo },
     { key: 'gst', label: 'GST Attachment', value: customerData?.gst_attachment },
     { key: 'pan', label: 'PAN Attachment', value: customerData?.pan_attachment },
-    { key: 'bank', label: 'Bank Proof', value: customerData?.bank_proof },
+    // dealer / distributor carry security cheques (multiple) instead of a bank proof
+    ...(isSecurityChequeType(customerData?.customer_type_key)
+      ? (customerData?.security_cheques || []).map((cheque: any, index: number) => ({
+        key: `security-cheque-${cheque.id ?? index}`,
+        label: `Security Cheque ${index + 1}`,
+        value: cheque.file_path,
+      }))
+      : [{ key: 'bank', label: 'Bank Proof', value: customerData?.bank_proof }]),
     { key: 'aadhar-front', label: 'Aadhaar Card', value: customerData?.aadhar },
     { key: 'aadhar-back', label: 'Aadhaar Card Back', value: customerData?.aadhar_back },
   ]
@@ -785,6 +795,7 @@ const CustomerDetails = ({ navigation, route }: CustomerDetailsProps) => {
                         type: data?.type || data?.customer_type || routeItem?.type,
                         customerTypeId: data?.customer_type_id || data?.customertype || routeItem?.customer_type_id,
                         customerTypeName: data?.customer_type || data?.type || routeItem?.customer_type,
+                        customerTypeKey: data?.customer_type_key,
                       })
                     }
                   }}>
@@ -1125,6 +1136,7 @@ const CustomerDetails = ({ navigation, route }: CustomerDetailsProps) => {
                         type: data?.type || data?.customer_type || routeItem?.type,
                         customerTypeId: data?.customer_type_id || data?.customertype || routeItem?.customer_type_id,
                         customerTypeName: data?.customer_type || data?.type || routeItem?.customer_type,
+                        customerTypeKey: data?.customer_type_key,
                       });
                     }
                   }}
