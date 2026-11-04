@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   Modal,
   Platform,
   Pressable,
@@ -13,11 +14,16 @@ import {
 import Svg, { Path } from 'react-native-svg';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Dropdown } from 'react-native-element-dropdown';
+import { Asset, launchImageLibrary } from 'react-native-image-picker';
 import Toast from 'react-native-toast-message';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import axiosClient from '../../api/AxiosClient';
+import axiosClient, { resolveMediaUrl } from '../../api/AxiosClient';
+import axiosClientForm from '../../api/AxiosForm';
 import AppText from '../../components/AppText/AppText';
 import { colors } from '../../utils/Colors';
+import { Distributor, loadDistributors } from './loadDistributors';
+
+const MAX_ATTACHMENTS = 5;
 
 type Gift = { rowId: number; giftId: number | null; quantity: string };
 type ActivityStatus = { label: string; value: number; statusName: string; message: string };
@@ -52,8 +58,19 @@ const FormLabel = ({ children }: { children: React.ReactNode }) => (
   <AppText color="#5F6F8F" size={12} family="InterBold" spacing={0.6}>{children}</AppText>
 );
 
-const CreatePAC = ({ navigation }: any) => {
+const toLocalDate = (value: string) => {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
+// Also the correction form: with an activityId the request sent back by the manager is edited and resubmitted.
+const CreatePAC = ({ navigation, route }: any) => {
   const insets = useSafeAreaInsets();
+  const activityId: number | undefined = route?.params?.activityId;
+  const isResubmit = Boolean(activityId);
+  const [loadingRequest, setLoadingRequest] = useState(isResubmit);
+  const [savedDistributor, setSavedDistributor] = useState<Distributor | null>(null);
+  const [keptAttachments, setKeptAttachments] = useState<string[]>([]);
   const [activityType, setActivityType] = useState<number | null>(null);
   const [activityStatuses, setActivityStatuses] = useState<ActivityStatus[]>([]);
   const [statusesLoading, setStatusesLoading] = useState(true);
@@ -65,6 +82,13 @@ const CreatePAC = ({ navigation }: any) => {
   const [activityDate, setActivityDate] = useState<Date | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
   const [location, setLocation] = useState('');
+  const [distributors, setDistributors] = useState<Distributor[]>([]);
+  const [distributorsLoading, setDistributorsLoading] = useState(true);
+  const [distributorsError, setDistributorsError] = useState('');
+  const [distributorId, setDistributorId] = useState<number | null>(null);
+  const [purpose, setPurpose] = useState('');
+  const [estimatedBudget, setEstimatedBudget] = useState('');
+  const [attachments, setAttachments] = useState<Asset[]>([]);
   const [companyShare, setCompanyShare] = useState('0');
   const [distributorShare, setDistributorShare] = useState('0');
   const [remark, setRemark] = useState('');
@@ -88,7 +112,7 @@ const CreatePAC = ({ navigation }: any) => {
         }));
         if (mounted) {
           setActivityStatuses(options);
-          setActivityType(options[0]?.value ?? null);
+          setActivityType(current => current ?? options[0]?.value ?? null);
         }
       } catch {
         if (mounted) {
@@ -119,7 +143,8 @@ const CreatePAC = ({ navigation }: any) => {
         }));
         if (mounted) {
           setGiftOptions(options);
-          setGifts([{ rowId: 1, giftId: options[0]?.value ?? null, quantity: '' }]);
+          // Keep gifts already filled from the request being corrected.
+          setGifts(current => current.some(gift => gift.giftId) ? current : [{ rowId: 1, giftId: options[0]?.value ?? null, quantity: '' }]);
         }
       } catch {
         if (mounted) {
@@ -134,6 +159,71 @@ const CreatePAC = ({ navigation }: any) => {
     loadGifts();
     return () => { mounted = false; };
   }, []);
+
+  useEffect(() => {
+    let mounted = true;
+
+    loadDistributors()
+      .then(options => {
+        if (!mounted) return;
+        setDistributors(options);
+        setDistributorsError(options.length ? '' : 'No assigned dealers found');
+      })
+      .catch(() => {
+        if (mounted) setDistributorsError('Unable to load dealers');
+      })
+      .finally(() => {
+        if (mounted) setDistributorsLoading(false);
+      });
+
+    return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!activityId) return;
+    let mounted = true;
+
+    axiosClient.get(`api/promotional-activities/${activityId}`)
+      .then(response => {
+        const request = response?.data?.data;
+        if (!mounted || !request) return;
+        setActivityType(request.activity_type_id ?? null);
+        if (request.distributor?.id) {
+          setDistributorId(request.distributor.id);
+          setSavedDistributor({ label: request.distributor.name || `Customer ${request.distributor.id}`, value: request.distributor.id });
+        }
+        if (request.activity_date) setActivityDate(toLocalDate(request.activity_date));
+        setLocation(request.location_name || '');
+        setPurpose(request.purpose || '');
+        setEstimatedBudget(request.estimated_budget != null ? String(Math.round(request.estimated_budget)) : '');
+        setCompanyShare(String(Math.round(request.company_share || 0)));
+        setDistributorShare(String(Math.round(request.distributor_share || 0)));
+        setRemark(request.remark || '');
+        setKeptAttachments(request.attachments || []);
+        if (request.gifts?.length) {
+          setGifts(request.gifts.map((gift: any, index: number) => ({ rowId: index + 1, giftId: gift.id, quantity: String(gift.quantity) })));
+        }
+      })
+      .catch(() => {
+        Toast.show({ type: 'error', text1: 'Unable to load the activity request.' });
+        navigation.goBack();
+      })
+      .finally(() => {
+        if (mounted) setLoadingRequest(false);
+      });
+
+    return () => { mounted = false; };
+  }, [activityId, navigation]);
+
+  const attachmentCount = keptAttachments.length + attachments.length;
+  const distributorOptions = savedDistributor && !distributors.some(item => String(item.value) === String(savedDistributor.value))
+    ? [savedDistributor, ...distributors]
+    : distributors;
+
+  const pickAttachments = async () => {
+    const result = await launchImageLibrary({ mediaType: 'photo', selectionLimit: MAX_ATTACHMENTS - attachmentCount, quality: 0.8 });
+    if (result.assets?.length) setAttachments(current => [...current, ...result.assets!].slice(0, MAX_ATTACHMENTS - keptAttachments.length));
+  };
 
   const updateGiftQuantity = (rowId: number, quantity: string) => {
     setGifts(current => current.map(gift => gift.rowId === rowId ? { ...gift, quantity } : gift));
@@ -158,8 +248,13 @@ const CreatePAC = ({ navigation }: any) => {
   };
 
   const submitActivity = async () => {
-    if (!activityType || !activityDate || !location.trim()) {
-      Toast.show({ type: 'error', text1: 'Please select activity type, date and location.' });
+    if (!activityType || !distributorId || !activityDate || !location.trim()) {
+      Toast.show({ type: 'error', text1: 'Please select activity type, dealer, date and location.' });
+      return;
+    }
+
+    if (!purpose.trim() || estimatedBudget === '') {
+      Toast.show({ type: 'error', text1: 'Please enter purpose and estimated budget.' });
       return;
     }
 
@@ -173,29 +268,51 @@ const CreatePAC = ({ navigation }: any) => {
     }
 
     const localDate = `${activityDate.getFullYear()}-${String(activityDate.getMonth() + 1).padStart(2, '0')}-${String(activityDate.getDate()).padStart(2, '0')}`;
+    const formData = new FormData();
+    formData.append('activity_type_id', String(activityType));
+    formData.append('distributor_id', String(distributorId));
+    formData.append('activity_date', localDate);
+    formData.append('location_name', location.trim());
+    formData.append('purpose', purpose.trim());
+    formData.append('estimated_budget', String(Number(estimatedBudget || 0)));
+    selectedGifts.forEach((gift, index) => {
+      formData.append(`gifts[${index}][gift_id]`, String(gift.gift_id));
+      formData.append(`gifts[${index}][quantity]`, String(gift.quantity));
+    });
+    formData.append('company_share', String(Number(companyShare || 0)));
+    formData.append('distributor_share', String(Number(distributorShare || 0)));
+    if (remark.trim()) formData.append('remark', remark.trim());
+    attachments.forEach((file, index) => formData.append('attachments[]', {
+      uri: file.uri,
+      type: file.type || 'image/jpeg',
+      name: file.fileName || `pac_attachment_${Date.now()}_${index}.jpg`,
+    } as any));
+    keptAttachments.forEach(path => formData.append('keep_attachments[]', path));
+
     setSubmitting(true);
     try {
-      const response = await axiosClient.post('api/promotional-activities', {
-        activity_type_id: activityType,
-        activity_date: localDate,
-        location_name: location.trim(),
-        gifts: selectedGifts,
-        company_share: Number(companyShare || 0),
-        distributor_share: Number(distributorShare || 0),
-        remark: remark.trim() || null,
-      });
+      const response = await axiosClientForm.post(
+        isResubmit ? `api/promotional-activities/${activityId}/resubmit` : 'api/promotional-activities',
+        formData,
+      );
       Toast.show({ type: 'success', text1: response?.data?.message || 'Activity submitted for approval.' });
       navigation.goBack();
     } catch (error: any) {
       const message = error?.response?.data?.message;
+      // Validation errors come back as { field: [messages] }.
+      const firstError = message && typeof message === 'object' ? (Object.values(message).flat()[0] as string) : '';
       Toast.show({
         type: 'error',
-        text1: typeof message === 'string' ? message : 'Unable to submit promotional activity.',
+        text1: typeof message === 'string' ? message : firstError || 'Unable to submit promotional activity.',
       });
     } finally {
       setSubmitting(false);
     }
   };
+
+  if (loadingRequest) {
+    return <View style={styles.loader}><ActivityIndicator size="large" color={colors.blue} /></View>;
+  }
 
   return (
     <View style={styles.container}>
@@ -204,7 +321,7 @@ const CreatePAC = ({ navigation }: any) => {
         <Pressable style={styles.backButton} onPress={() => navigation.goBack()} hitSlop={10}>
           <BackIcon />
         </Pressable>
-        <AppText color={colors.black} size={19} family="InterBold">New Promotional Activity</AppText>
+        <AppText color={colors.black} size={19} family="InterBold">{isResubmit ? 'Correct Promotional Activity' : 'New Promotional Activity'}</AppText>
       </View>
 
       <ScrollView
@@ -232,7 +349,28 @@ const CreatePAC = ({ navigation }: any) => {
         </View>
 
         <View style={styles.fieldGroup}>
-          <FormLabel>ACTIVITY DATE</FormLabel>
+          <FormLabel>DEALER / DISTRIBUTOR</FormLabel>
+          <Dropdown
+            style={styles.input}
+            containerStyle={styles.dropdownContainer}
+            placeholderStyle={styles.dropdownPlaceholder}
+            selectedTextStyle={styles.dropdownSelected}
+            data={distributorOptions}
+            labelField="label"
+            valueField="value"
+            value={distributorId}
+            disable={distributorsLoading}
+            search
+            searchPlaceholder="Search dealer..."
+            placeholder={distributorsLoading ? 'Loading dealers...' : 'Select dealer'}
+            onChange={item => setDistributorId(item.value)}
+            renderRightIcon={() => distributorsLoading ? <ActivityIndicator size="small" color={colors.blue} /> : <ChevronDown />}
+          />
+          {distributorsError ? <AppText color="#BE0B0B" size={12}>{distributorsError}</AppText> : null}
+        </View>
+
+        <View style={styles.fieldGroup}>
+          <FormLabel>PROPOSED DATE</FormLabel>
           <Pressable style={styles.input} onPress={() => setShowCalendar(true)}>
             <AppText color={formattedActivityDate ? colors.black : '#929BAD'} size={15}>
               {formattedActivityDate || 'mm/dd/yyyy'}
@@ -253,7 +391,7 @@ const CreatePAC = ({ navigation }: any) => {
         <Modal visible={showCalendar && Platform.OS === 'ios'} transparent animationType="fade" onRequestClose={() => setShowCalendar(false)}>
           <View style={styles.calendarOverlay}>
             <View style={styles.calendarModal}>
-              <AppText color={colors.black} size={18} family="InterBold">Select Activity Date</AppText>
+              <AppText color={colors.black} size={18} family="InterBold">Select Proposed Date</AppText>
               <DateTimePicker
                 value={activityDate || new Date()}
                 mode="date"
@@ -282,6 +420,35 @@ const CreatePAC = ({ navigation }: any) => {
             placeholderTextColor="#929BAD"
             style={styles.textInput}
           />
+        </View>
+
+        <View style={styles.fieldGroup}>
+          <FormLabel>PURPOSE</FormLabel>
+          <TextInput
+            value={purpose}
+            onChangeText={setPurpose}
+            placeholder="Why is this activity needed?"
+            placeholderTextColor="#929BAD"
+            multiline
+            maxLength={1000}
+            textAlignVertical="top"
+            style={[styles.textInput, styles.multilineInput]}
+          />
+        </View>
+
+        <View style={styles.fieldGroup}>
+          <FormLabel>ESTIMATED BUDGET</FormLabel>
+          <View style={styles.amountInput}>
+            <AppText color="#718096" size={16}>₹</AppText>
+            <TextInput
+              value={estimatedBudget}
+              onChangeText={value => setEstimatedBudget(value.replace(/[^0-9]/g, ''))}
+              keyboardType="number-pad"
+              placeholder="0"
+              placeholderTextColor="#929BAD"
+              style={styles.amountTextInput}
+            />
+          </View>
         </View>
 
         <View style={styles.fieldGroup}>
@@ -365,6 +532,33 @@ const CreatePAC = ({ navigation }: any) => {
         </View>
 
         <View style={styles.fieldGroup}>
+          <FormLabel>{`ATTACHMENTS (OPTIONAL, MAX ${MAX_ATTACHMENTS})`}</FormLabel>
+          <AppText color="#718096" size={12}>Proposal, quotation or other supporting documents</AppText>
+          <View style={styles.attachmentRow}>
+            {keptAttachments.map(path => (
+              <Pressable key={path} style={styles.attachmentBox} onPress={() => setKeptAttachments(current => current.filter(item => item !== path))}>
+                {/\.pdf$/i.test(path)
+                  ? <AppText color={colors.blue} size={13} family="InterBold">PDF</AppText>
+                  : <Image source={{ uri: resolveMediaUrl(path) }} style={styles.attachmentPreview} resizeMode="cover" />}
+                <View style={styles.removeAttachment}><AppText color={colors.white} size={14}>×</AppText></View>
+              </Pressable>
+            ))}
+            {attachments.map((file, index) => (
+              <Pressable key={`${file.uri}-${index}`} style={styles.attachmentBox} onPress={() => setAttachments(current => current.filter((_, fileIndex) => fileIndex !== index))}>
+                <Image source={{ uri: file.uri }} style={styles.attachmentPreview} resizeMode="cover" />
+                <View style={styles.removeAttachment}><AppText color={colors.white} size={14}>×</AppText></View>
+              </Pressable>
+            ))}
+            {attachmentCount < MAX_ATTACHMENTS ? (
+              <Pressable style={styles.attachmentBox} onPress={pickAttachments}>
+                <AppText color="#718096" size={24}>+</AppText>
+                <AppText color="#718096" size={12}>Add</AppText>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+
+        <View style={styles.fieldGroup}>
           <FormLabel>REMARK</FormLabel>
           <TextInput
             value={remark}
@@ -377,7 +571,7 @@ const CreatePAC = ({ navigation }: any) => {
 
         <Pressable style={[styles.submitButton, submitting && styles.buttonDisabled]} onPress={submitActivity} disabled={submitting}>
           {submitting ? <ActivityIndicator color={colors.white} /> : (
-            <AppText color={colors.white} size={15} family="InterBold">Submit for Approval</AppText>
+            <AppText color={colors.white} size={15} family="InterBold">{isResubmit ? 'Resubmit for Approval' : 'Submit for Approval'}</AppText>
           )}
         </Pressable>
       </ScrollView>
@@ -387,6 +581,7 @@ const CreatePAC = ({ navigation }: any) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bgColor },
+  loader: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bgColor },
   header: {
     minHeight: 82,
     paddingHorizontal: 16,
@@ -421,6 +616,22 @@ const styles = StyleSheet.create({
     color: colors.black,
     fontSize: 15,
   },
+  multilineInput: { height: 90, paddingTop: 14 },
+  attachmentRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 9 },
+  attachmentBox: {
+    width: 72,
+    height: 72,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#AEBAD1',
+    borderRadius: 10,
+    backgroundColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  attachmentPreview: { width: '100%', height: '100%' },
+  removeAttachment: { position: 'absolute', top: 4, right: 4, width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(0,0,0,0.65)', alignItems: 'center', justifyContent: 'center' },
   dropdownContainer: { borderRadius: 10, borderColor: '#CBD5E0' },
   dropdownPlaceholder: { color: '#929BAD', fontSize: 15 },
   dropdownSelected: { color: colors.black, fontSize: 15 },

@@ -28,11 +28,12 @@ const palette = {
 
 type PACActivity = {
   id: number;
+  request_no?: string;
   activity_type_id: number;
   activity_type: string;
   activity_date: string;
   location_name: string;
-  approval_status: 'pending' | 'approved' | 'rejected';
+  approval_status: 'pending' | 'approved' | 'rejected' | 'revision_required' | 'closure_pending';
   created_by?: { id: number; name: string };
 };
 
@@ -216,6 +217,7 @@ const PAC = ({ navigation }: any) => {
             <ActivityIcon type={activity.activity_type.toLowerCase().includes('retailer') ? 'store' : 'tools'} />
             <View style={styles.activityCopy}>
               <AppText color={palette.white} size={16} family="InterBold">{activity.activity_type}</AppText>
+              {activity.request_no ? <AppText color="#718096" size={12} family="InterSemiBold">{activity.request_no}</AppText> : null}
               <AppText color="#8193B9" size={13} family="InterRegular" lineHeight={19}>
                 {formatDate(activity.activity_date)} · {activity.location_name}
               </AppText>
@@ -223,9 +225,9 @@ const PAC = ({ navigation }: any) => {
                 <AppText color="#718096" size={12}>By {activity.created_by.name}</AppText>
               ) : null}
             </View>
-            <View style={[styles.statusBadge, activity.approval_status === 'pending' && styles.pendingBadge, activity.approval_status === 'rejected' && styles.rejectedBadge]}>
-              <AppText color={activity.approval_status === 'pending' ? '#B36B00' : activity.approval_status === 'rejected' ? '#BE0B0B' : palette.green} size={11} family="InterBold">
-                {activity.approval_status === 'pending' ? 'PENDING APPROVAL' : activity.approval_status.toUpperCase()}
+            <View style={[styles.statusBadge, activity.approval_status === 'pending' && styles.pendingBadge, activity.approval_status === 'rejected' && styles.rejectedBadge, activity.approval_status === 'revision_required' && styles.revisionBadge, activity.approval_status === 'closure_pending' && styles.closureBadge]}>
+              <AppText color={activity.approval_status === 'pending' ? '#B36B00' : activity.approval_status === 'rejected' ? '#BE0B0B' : activity.approval_status === 'revision_required' ? '#7C3AED' : activity.approval_status === 'closure_pending' ? '#0F766E' : palette.green} size={11} family="InterBold">
+                {activity.approval_status === 'pending' ? 'PENDING APPROVAL' : activity.approval_status.replace(/_/g, ' ').toUpperCase()}
               </AppText>
             </View>
           </Pressable>
@@ -324,6 +326,8 @@ const styles = StyleSheet.create({
   statusBadge: { borderWidth: 1, borderColor: '#A7DEC9', backgroundColor: '#E8F7F1', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 18 },
   pendingBadge: { borderColor: '#E8C17A', backgroundColor: '#FFF5DF' },
   rejectedBadge: { borderColor: '#F3B7B7', backgroundColor: '#FDECEC' },
+  revisionBadge: { borderColor: '#D8B4FE', backgroundColor: '#F3E8FF' },
+  closureBadge: { borderColor: '#81E6D9', backgroundColor: '#E6FFFA' },
   emptyCard: { margin: 16, padding: 24, borderRadius: 16, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.surface, alignItems: 'center', gap: 8 },
   loader: { marginTop: 36 },
 });

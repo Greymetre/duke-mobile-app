@@ -4,14 +4,26 @@ import { Asset, launchImageLibrary } from 'react-native-image-picker';
 import { Dropdown } from 'react-native-element-dropdown';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
-import axiosClient from '../../api/AxiosClient';
+import axiosClient, { resolveMediaUrl } from '../../api/AxiosClient';
 import axiosClientForm from '../../api/AxiosForm';
-import { API_ENDPOINT } from '../../api/ApiUrls';
 import AppText from '../../components/AppText/AppText';
 import { colors } from '../../utils/Colors';
+import { Distributor, loadDistributors } from './loadDistributors';
 
 type Participant = { id: number; name: string; mobile: string; address: string };
-type Distributor = { label: string; value: number };
+
+const MAX_PHOTOS = 3;
+const MAX_BILLS = 5;
+
+const fileUrl = (path: string) => resolveMediaUrl(path.replace(/^(https?:\/\/[^/]+)\/storage\//i, '$1/public/storage/'));
+
+const appendImages = (formData: FormData, field: string, files: Asset[], prefix: string) => {
+  files.forEach((file, index) => formData.append(field, {
+    uri: file.uri,
+    type: file.type || 'image/jpeg',
+    name: file.fileName || `${prefix}_${Date.now()}_${index}.jpg`,
+  } as any));
+};
 
 const PACExecution = ({ navigation, route }: any) => {
   const insets = useSafeAreaInsets();
@@ -21,6 +33,11 @@ const PACExecution = ({ navigation, route }: any) => {
   const [distributorsError, setDistributorsError] = useState('');
   const [distributorId, setDistributorId] = useState<number | null>(null);
   const [photos, setPhotos] = useState<Asset[]>([]);
+  // Files of a submission the manager returned; kept unless removed.
+  const [keptPhotos, setKeptPhotos] = useState<string[]>([]);
+  const [keptBills, setKeptBills] = useState<string[]>([]);
+  const [bills, setBills] = useState<Asset[]>([]);
+  const [actualExpense, setActualExpense] = useState('');
   const [participants, setParticipants] = useState<Participant[]>([{ id: 1, name: '', mobile: '', address: '' }]);
   const [executionRemark, setExecutionRemark] = useState('');
   const [loading, setLoading] = useState(true);
@@ -32,41 +49,22 @@ const PACExecution = ({ navigation, route }: any) => {
         const activityResponse = await axiosClient.get(`api/promotional-activities/${activityId}`);
         const activityData = activityResponse?.data?.data;
         setActivity(activityData);
+        // The dealer chosen when the request was created is preselected.
+        const requestDistributor = activityData?.distributor;
+        if (requestDistributor?.id) setDistributorId(requestDistributor.id);
+        if (activityData?.participants?.length) {
+          setParticipants(activityData.participants.map((item: any, index: number) => ({ id: index + 1, name: item.name || '', mobile: item.mobile || '', address: item.address || '' })));
+        }
+        setExecutionRemark(activityData?.execution_remark || '');
+        if (activityData?.actual_expense != null) setActualExpense(String(activityData.actual_expense));
+        setKeptPhotos(activityData?.activity_photos || []);
+        setKeptBills(activityData?.bills || []);
 
         try {
-          const typeResponse = await axiosClient.get(API_ENDPOINT.GET_CUSTOMER_TYPE_LIST);
-          const typePayload = typeResponse?.data;
-          const typeRows = typePayload?.data?.data
-            ?? typePayload?.data?.customer_types
-            ?? typePayload?.data
-            ?? typePayload?.customer_types
-            ?? [];
-          const sellerTypes = (Array.isArray(typeRows) ? typeRows : []).filter((item: any) => {
-            const name = String(item?.customertype_name ?? item?.type_name ?? item?.type ?? item?.customer_type ?? item?.name ?? '').toLowerCase();
-            return (name.includes('distributor') || name.includes('dealer'))
-              && !name.includes('master') && !name.includes('secondary');
-          });
-          const sellerResponses = await Promise.all(sellerTypes.map((type: any) =>
-            axiosClient.get(API_ENDPOINT.GET_CUSTOMER_LIST, {
-              params: {
-                customer_type_id: type?.id ?? type?.customer_type_id ?? type?.customertype ?? type?.value,
-                pageSize: 100,
-                page: 1,
-              },
-            })));
-          const seen = new Set<string>();
-          const options = sellerResponses.flatMap(response => {
-            const payload = response?.data?.data;
-            return Array.isArray(payload) ? payload : (payload?.data || []);
-          }).map((item: any) => ({
-            label: item?.name || item?.shop_name || item?.legal_name || item?.customer_name || `Customer ${item?.customer_id ?? item?.id}`,
-            value: item?.customer_id ?? item?.id,
-          })).filter((item: Distributor) => {
-            const key = String(item.value);
-            if (!item.value || seen.has(key)) return false;
-            seen.add(key);
-            return true;
-          });
+          const options = await loadDistributors();
+          if (requestDistributor?.id && !options.some(item => String(item.value) === String(requestDistributor.id))) {
+            options.unshift({ label: requestDistributor.name || `Customer ${requestDistributor.id}`, value: requestDistributor.id });
+          }
           setDistributors(options);
           setDistributorsError(options.length ? '' : 'No assigned distributors found');
         } catch {
@@ -83,9 +81,18 @@ const PACExecution = ({ navigation, route }: any) => {
     loadForm();
   }, [activityId, navigation]);
 
+  const photoSlots = [...keptPhotos.map(path => ({ key: path, uri: fileUrl(path), remove: () => setKeptPhotos(current => current.filter(item => item !== path)) })),
+    ...photos.map((photo, index) => ({ key: `${photo.uri}-${index}`, uri: photo.uri || '', remove: () => setPhotos(current => current.filter((_, photoIndex) => photoIndex !== index)) }))];
+  const billCount = keptBills.length + bills.length;
+
   const pickPhotos = async () => {
-    const result = await launchImageLibrary({ mediaType: 'photo', selectionLimit: 3 - photos.length, quality: 0.8 });
-    if (result.assets?.length) setPhotos(current => [...current, ...result.assets!].slice(0, 3));
+    const result = await launchImageLibrary({ mediaType: 'photo', selectionLimit: MAX_PHOTOS - photoSlots.length, quality: 0.8 });
+    if (result.assets?.length) setPhotos(current => [...current, ...result.assets!].slice(0, MAX_PHOTOS - keptPhotos.length));
+  };
+
+  const pickBills = async () => {
+    const result = await launchImageLibrary({ mediaType: 'photo', selectionLimit: MAX_BILLS - billCount, quality: 0.8 });
+    if (result.assets?.length) setBills(current => [...current, ...result.assets!].slice(0, MAX_BILLS - keptBills.length));
   };
 
   const updateParticipant = (id: number, key: keyof Omit<Participant, 'id'>, value: string) => {
@@ -99,26 +106,36 @@ const PACExecution = ({ navigation, route }: any) => {
   };
 
   const submit = async () => {
-    if (!distributorId || !photos.length || participants.some(item => !item.name.trim() || !item.mobile.trim() || !item.address.trim())) {
+    if (!distributorId || !photoSlots.length || participants.some(item => !item.name.trim() || !item.mobile.trim() || !item.address.trim())) {
       Toast.show({ type: 'error', text1: 'Distributor, photo and all participant details are required.' });
+      return;
+    }
+    if (actualExpense === '') {
+      Toast.show({ type: 'error', text1: 'Please enter the actual expense.' });
+      return;
+    }
+    if (Number(actualExpense) > 0 && !billCount) {
+      Toast.show({ type: 'error', text1: 'Please upload at least one bill for the expense.' });
       return;
     }
     const formData = new FormData();
     formData.append('distributor_id', String(distributorId));
     formData.append('participants', JSON.stringify(participants.map(({ id: _id, ...item }) => item)));
     formData.append('execution_remark', executionRemark.trim());
-    photos.forEach((photo, index) => formData.append('photos[]', {
-      uri: photo.uri,
-      type: photo.type || 'image/jpeg',
-      name: photo.fileName || `pac_${Date.now()}_${index}.jpg`,
-    } as any));
+    formData.append('actual_expense', String(Number(actualExpense)));
+    appendImages(formData, 'photos[]', photos, 'pac');
+    appendImages(formData, 'bills[]', bills, 'pac_bill');
+    keptPhotos.forEach(path => formData.append('keep_photos[]', path));
+    keptBills.forEach(path => formData.append('keep_bills[]', path));
     setSubmitting(true);
     try {
       const response = await axiosClientForm.post(`api/promotional-activities/${activityId}/complete`, formData);
-      Toast.show({ type: 'success', text1: response?.data?.message || 'Activity completed successfully.' });
+      Toast.show({ type: 'success', text1: response?.data?.message || 'Activity details submitted for review.' });
       navigation.popTo('BottomTab');
     } catch (error: any) {
-      Toast.show({ type: 'error', text1: error?.response?.data?.message || 'Unable to complete activity.' });
+      const message = error?.response?.data?.message;
+      const firstError = message && typeof message === 'object' ? (Object.values(message).flat()[0] as string) : '';
+      Toast.show({ type: 'error', text1: typeof message === 'string' ? message : firstError || 'Unable to submit activity details.' });
     } finally { setSubmitting(false); }
   };
 
@@ -132,9 +149,15 @@ const PACExecution = ({ navigation, route }: any) => {
         <AppText size={19} family="InterBold">Activity Execution Details</AppText>
       </View>
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 28 + insets.bottom }]} keyboardShouldPersistTaps="handled">
+        {activity.review_remark ? (
+          <View style={styles.returnedNote}>
+            <AppText color="#7C3AED" size={11} family="InterBold">RETURNED FOR CORRECTION</AppText>
+            <AppText size={14}>{activity.review_remark}</AppText>
+          </View>
+        ) : null}
         <AppText color="#718096" size={11} family="InterBold">APPROVAL MANAGER</AppText>
         <AppText size={15} family="InterSemiBold">{activity.reporting_manager?.name || '-'}{activity.reporting_manager?.designation ? ` — ${activity.reporting_manager.designation}` : ''}</AppText>
-        <View style={styles.group}><AppText style={styles.label}>ACTIVITY DATE</AppText><View style={styles.readonly}><AppText size={14}>{activity.activity_date}</AppText></View></View>
+        <View style={styles.group}><AppText style={styles.label}>PROPOSED DATE</AppText><View style={styles.readonly}><AppText size={14}>{activity.activity_date}</AppText></View></View>
         <View style={styles.group}><AppText style={styles.label}>ACTIVITY LOCATION</AppText><View style={styles.readonly}><AppText size={14}>{activity.location_name}</AppText></View></View>
         <View style={styles.group}>
           <AppText style={styles.label}>DISTRIBUTOR</AppText>
@@ -145,10 +168,10 @@ const PACExecution = ({ navigation, route }: any) => {
           <AppText style={styles.label}>ACTIVITY PHOTOS (MAX 3)</AppText>
           <View style={styles.photoRow}>
             {[0, 1, 2].map(index => (
-              <Pressable key={index} style={styles.photoBox} onPress={photos[index] ? () => setPhotos(current => current.filter((_, photoIndex) => photoIndex !== index)) : pickPhotos}>
-                {photos[index]?.uri ? (
+              <Pressable key={photoSlots[index]?.key || index} style={styles.photoBox} onPress={photoSlots[index] ? photoSlots[index].remove : pickPhotos}>
+                {photoSlots[index] ? (
                   <>
-                    <Image source={{ uri: photos[index].uri }} style={styles.photoPreview} resizeMode="cover" />
+                    <Image source={{ uri: photoSlots[index].uri }} style={styles.photoPreview} resizeMode="cover" />
                     <View style={styles.removePhoto}><AppText color={colors.white} size={14}>×</AppText></View>
                   </>
                 ) : (
@@ -180,11 +203,49 @@ const PACExecution = ({ navigation, route }: any) => {
           <Pressable style={styles.addButton} onPress={addParticipant} disabled={participants.length >= 50}><AppText color={colors.blue} size={14} family="InterBold">+ Add Participant</AppText></Pressable>
         </View>
         <View style={styles.group}>
+          <AppText style={styles.label}>ACTUAL EXPENSE</AppText>
+          <View style={styles.amountInput}>
+            <AppText color="#718096" size={16}>₹</AppText>
+            <TextInput style={styles.amountTextInput} value={actualExpense} onChangeText={value => setActualExpense(value.replace(/[^0-9.]/g, ''))} placeholder="0" placeholderTextColor="#929BAD" keyboardType="decimal-pad" />
+          </View>
+          {activity.estimated_budget != null ? (
+            <AppText color={Number(actualExpense || 0) > activity.estimated_budget ? '#BE0B0B' : '#718096'} size={12}>
+              Estimated budget ₹{activity.estimated_budget}{Number(actualExpense || 0) > activity.estimated_budget ? ' — actual expense is over budget' : ''}
+            </AppText>
+          ) : null}
+        </View>
+        <View style={styles.group}>
+          <AppText style={styles.label}>{`BILLS / INVOICES (MAX ${MAX_BILLS})`}</AppText>
+          <AppText color="#718096" size={12}>Needed when the actual expense is above 0</AppText>
+          <View style={styles.billRow}>
+            {keptBills.map(path => (
+              <Pressable key={path} style={styles.billBox} onPress={() => setKeptBills(current => current.filter(item => item !== path))}>
+                {/\.pdf$/i.test(path)
+                  ? <AppText color={colors.blue} size={13} family="InterBold">PDF</AppText>
+                  : <Image source={{ uri: fileUrl(path) }} style={styles.photoPreview} resizeMode="cover" />}
+                <View style={styles.removePhoto}><AppText color={colors.white} size={14}>×</AppText></View>
+              </Pressable>
+            ))}
+            {bills.map((bill, index) => (
+              <Pressable key={`${bill.uri}-${index}`} style={styles.billBox} onPress={() => setBills(current => current.filter((_, billIndex) => billIndex !== index))}>
+                <Image source={{ uri: bill.uri }} style={styles.photoPreview} resizeMode="cover" />
+                <View style={styles.removePhoto}><AppText color={colors.white} size={14}>×</AppText></View>
+              </Pressable>
+            ))}
+            {billCount < MAX_BILLS ? (
+              <Pressable style={styles.billBox} onPress={pickBills}>
+                <AppText color="#718096" size={24}>+</AppText>
+                <AppText color="#718096" size={12}>Bill</AppText>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+        <View style={styles.group}>
           <AppText style={styles.label}>REMARK</AppText>
           <TextInput style={[styles.textInput, styles.remarkInput]} value={executionRemark} onChangeText={setExecutionRemark} placeholder="Add activity remark" placeholderTextColor="#929BAD" multiline maxLength={1000} textAlignVertical="top" />
         </View>
         <Pressable style={[styles.submitButton, submitting && styles.disabled]} onPress={submit} disabled={submitting}>
-          {submitting ? <ActivityIndicator color={colors.white} /> : <AppText color={colors.white} size={15} family="InterBold">Complete Activity</AppText>}
+          {submitting ? <ActivityIndicator color={colors.white} /> : <AppText color={colors.white} size={15} family="InterBold">Submit for Review</AppText>}
         </Pressable>
       </ScrollView>
     </View>
@@ -202,6 +263,11 @@ const styles = StyleSheet.create({
   participantHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, participantCard: { padding: 12, gap: 9, borderRadius: 12, backgroundColor: colors.white, borderWidth: 1, borderColor: '#D9DFEC' }, participantTitle: { flexDirection: 'row', justifyContent: 'space-between' },
   textInput: { height: 46, paddingHorizontal: 12, borderWidth: 1, borderColor: '#CBD5E0', borderRadius: 9, color: colors.black, backgroundColor: colors.white },
   remarkInput: { height: 76, paddingTop: 12 },
+  amountInput: { height: 50, paddingHorizontal: 14, borderWidth: 1, borderColor: '#CBD5E0', borderRadius: 10, backgroundColor: colors.white, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  amountTextInput: { flex: 1, color: colors.black, fontSize: 15, paddingVertical: 0 },
+  billRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 9 },
+  billBox: { width: 72, height: 72, overflow: 'hidden', borderWidth: 1, borderStyle: 'dashed', borderColor: '#AEBAD1', borderRadius: 10, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center' },
+  returnedNote: { padding: 14, gap: 6, borderRadius: 12, borderWidth: 1, borderColor: '#D8B4FE', backgroundColor: '#FAF5FF' },
   addButton: { alignSelf: 'flex-start', height: 44, paddingHorizontal: 14, borderRadius: 9, borderWidth: 1, borderColor: '#B9C5E4', backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center' },
   submitButton: { height: 50, borderRadius: 10, backgroundColor: colors.blue, alignItems: 'center', justifyContent: 'center' }, disabled: { opacity: 0.65 },
 });

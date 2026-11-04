@@ -89,6 +89,9 @@ const Notifications = () => {
         });
         return;
       }
+      case 'promotional_activity':
+        navigation.navigate('PACDetails', {activityId: id});
+        return;
       case 'tour':
       case 'tour_plan':
         navigation.navigate('TourPlanPage', {tourId: id});

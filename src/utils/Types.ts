@@ -22,7 +22,7 @@ export type RootStackParamList = {
   BottomTab: undefined;
   NewComplaint: {complaintId?: number} | undefined;
   ComplaintDetail: {complaintId: number};
-  CreatePAC: undefined;
+  CreatePAC: { activityId?: number } | undefined;
   PACDetails: { activityId: number };
   PACExecution: { activityId: number };
   CustomerList: {
