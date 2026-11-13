@@ -26,6 +26,9 @@ type Details = {
   creator?: { id: number; name: string };
   reporting_manager?: { id: number; name: string; designation?: string };
   gifts: Array<{ id: number; name: string; quantity: number }>;
+  pop_delivery_address?: string | null;
+  sample_materials?: Array<{ name: string; quantity: number }>;
+  sample_delivery_address?: string | null;
   can_approve: boolean;
   can_complete: boolean;
   can_resubmit?: boolean;
@@ -152,6 +155,32 @@ const PACDetails = ({ navigation, route }: any) => {
     </View>
   ) : null;
 
+  const papMaterialCard = details.gifts?.length ? (
+    <View style={styles.card}>
+      <AppText color="#718096" size={11} family="InterBold" spacing={0.5}>PAP MATERIAL</AppText>
+      {details.gifts.map(gift => (
+        <View style={styles.valueRow} key={gift.id}>
+          <AppText color={colors.black} size={14}>{gift.name}</AppText>
+          <AppText color={colors.black} size={14} family="InterBold">× {gift.quantity}</AppText>
+        </View>
+      ))}
+      {details.pop_delivery_address ? <Field label="DELIVERY ADDRESS" value={details.pop_delivery_address} /> : null}
+    </View>
+  ) : null;
+
+  const sampleMaterialCard = details.sample_materials?.length ? (
+    <View style={styles.card}>
+      <AppText color="#718096" size={11} family="InterBold" spacing={0.5}>SAMPLE MATERIAL</AppText>
+      {details.sample_materials.map((sample, index) => (
+        <View style={styles.valueRow} key={`${sample.name}-${index}`}>
+          <AppText color={colors.black} size={14}>{sample.name}</AppText>
+          <AppText color={colors.black} size={14} family="InterBold">× {sample.quantity}</AppText>
+        </View>
+      ))}
+      {details.sample_delivery_address ? <Field label="DELIVERY ADDRESS" value={details.sample_delivery_address} /> : null}
+    </View>
+  ) : null;
+
   const pending = details.approval_status === 'pending';
   const revisionRequired = details.approval_status === 'revision_required';
   const statusColor = pending ? '#B36B00' : details.approval_status === 'rejected' ? '#BE0B0B' : revisionRequired ? '#7C3AED' : '#14875D';
@@ -182,10 +211,8 @@ const PACDetails = ({ navigation, route }: any) => {
 
           {attachmentsCard}
 
-          <View style={styles.card}>
-            <AppText color="#718096" size={11} family="InterBold" spacing={0.5}>GIFTS</AppText>
-            {details.gifts.length ? details.gifts.map(gift => <View style={styles.valueRow} key={gift.id}><AppText size={14}>{gift.name}</AppText><AppText size={14} family="InterBold">× {gift.quantity}</AppText></View>) : <AppText color="#718096" size={14}>No gifts</AppText>}
-          </View>
+          {papMaterialCard}
+          {sampleMaterialCard}
 
           <View style={styles.card}>
             <AppText color="#718096" size={11} family="InterBold" spacing={0.5}>OTHER EXPENSE AMOUNT</AppText>
@@ -285,15 +312,8 @@ const PACDetails = ({ navigation, route }: any) => {
 
         {attachmentsCard}
 
-        <View style={styles.card}>
-          <AppText color="#718096" size={11} family="InterBold" spacing={0.5}>GIFTS</AppText>
-          {details.gifts.length ? details.gifts.map(gift => (
-            <View style={styles.valueRow} key={gift.id}>
-              <AppText color={colors.black} size={14}>{gift.name}</AppText>
-              <AppText color={colors.black} size={14} family="InterBold">× {gift.quantity}</AppText>
-            </View>
-          )) : <AppText color="#718096" size={14}>No gifts</AppText>}
-        </View>
+        {papMaterialCard}
+        {sampleMaterialCard}
 
         <View style={styles.card}>
           <AppText color="#718096" size={11} family="InterBold" spacing={0.5}>OTHER EXPENSE AMOUNT</AppText>

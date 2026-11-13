@@ -26,6 +26,7 @@ import { Distributor, loadDistributors } from './loadDistributors';
 const MAX_ATTACHMENTS = 5;
 
 type Gift = { rowId: number; giftId: number | null; quantity: string };
+type SampleMaterial = { rowId: number; name: string; quantity: string };
 type ActivityStatus = { label: string; value: number; statusName: string; message: string };
 type GiftOption = { label: string; value: number; availableQuantity: number };
 
@@ -45,6 +46,12 @@ const DeleteIcon = () => (
   <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
     <Path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5" stroke="#D83B55" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
   </Svg>
+);
+
+const Checkbox = ({ checked }: { checked: boolean }) => (
+  <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
+    {checked ? <AppText color={colors.white} size={14} family="InterBold">✓</AppText> : null}
+  </View>
 );
 
 const CalendarIcon = () => (
@@ -92,8 +99,17 @@ const CreatePAC = ({ navigation, route }: any) => {
   const [companyShare, setCompanyShare] = useState('0');
   const [distributorShare, setDistributorShare] = useState('0');
   const [remark, setRemark] = useState('');
+  const [hasPopMaterial, setHasPopMaterial] = useState(false);
+  const [hasSampleMaterial, setHasSampleMaterial] = useState(false);
+  const [popDeliveryAddress, setPopDeliveryAddress] = useState('');
+  const [sampleDeliveryAddress, setSampleDeliveryAddress] = useState('');
+  const [showPopAddress, setShowPopAddress] = useState(false);
+  const [showSampleAddress, setShowSampleAddress] = useState(false);
   const [gifts, setGifts] = useState<Gift[]>([
     { rowId: 1, giftId: null, quantity: '' },
+  ]);
+  const [sampleMaterials, setSampleMaterials] = useState<SampleMaterial[]>([
+    { rowId: 1, name: '', quantity: '' },
   ]);
 
   useEffect(() => {
@@ -202,6 +218,23 @@ const CreatePAC = ({ navigation, route }: any) => {
         setKeptAttachments(request.attachments || []);
         if (request.gifts?.length) {
           setGifts(request.gifts.map((gift: any, index: number) => ({ rowId: index + 1, giftId: gift.id, quantity: String(gift.quantity) })));
+          setHasPopMaterial(true);
+        }
+        if (request.pop_delivery_address) {
+          setPopDeliveryAddress(request.pop_delivery_address);
+          setShowPopAddress(true);
+        }
+        if (request.sample_materials?.length) {
+          setHasSampleMaterial(true);
+          setSampleMaterials(request.sample_materials.map((sample: any, index: number) => ({
+            rowId: index + 1,
+            name: sample.name || '',
+            quantity: String(sample.quantity || ''),
+          })));
+        }
+        if (request.sample_delivery_address) {
+          setSampleDeliveryAddress(request.sample_delivery_address);
+          setShowSampleAddress(true);
         }
       })
       .catch(() => {
@@ -238,6 +271,11 @@ const CreatePAC = ({ navigation, route }: any) => {
     setGifts(current => [...current, { rowId: nextRowId, giftId: null, quantity: '' }]);
   };
 
+  const addSampleMaterial = () => {
+    const nextRowId = sampleMaterials.length ? Math.max(...sampleMaterials.map(item => item.rowId)) + 1 : 1;
+    setSampleMaterials(current => [...current, { rowId: nextRowId, name: '', quantity: '' }]);
+  };
+
   const formattedActivityDate = activityDate
     ? `${String(activityDate.getMonth() + 1).padStart(2, '0')}/${String(activityDate.getDate()).padStart(2, '0')}/${activityDate.getFullYear()}`
     : '';
@@ -258,12 +296,29 @@ const CreatePAC = ({ navigation, route }: any) => {
       return;
     }
 
-    const selectedGifts = gifts
+    const selectedGifts = hasPopMaterial ? gifts
       .filter(gift => gift.giftId && Number(gift.quantity) > 0)
-      .map(gift => ({ gift_id: gift.giftId, quantity: Number(gift.quantity) }));
+      .map(gift => ({ gift_id: gift.giftId, quantity: Number(gift.quantity) })) : [];
 
-    if (gifts.some(gift => (gift.giftId && !Number(gift.quantity)) || (!gift.giftId && Number(gift.quantity)))) {
-      Toast.show({ type: 'error', text1: 'Please select gift and enter its quantity.' });
+    if (hasPopMaterial && (!selectedGifts.length || gifts.some(gift => !gift.giftId || !Number(gift.quantity)))) {
+      Toast.show({ type: 'error', text1: 'Please select each PAP material and enter its quantity.' });
+      return;
+    }
+    if (hasPopMaterial && !popDeliveryAddress.trim()) {
+      Toast.show({ type: 'error', text1: 'Please add the PAP material delivery address.' });
+      return;
+    }
+
+    const selectedSamples = hasSampleMaterial ? sampleMaterials.map(sample => ({
+      name: sample.name.trim(),
+      quantity: Number(sample.quantity),
+    })) : [];
+    if (hasSampleMaterial && (!selectedSamples.length || selectedSamples.some(sample => !sample.name || !sample.quantity))) {
+      Toast.show({ type: 'error', text1: 'Please enter each sample material and its quantity.' });
+      return;
+    }
+    if (hasSampleMaterial && !sampleDeliveryAddress.trim()) {
+      Toast.show({ type: 'error', text1: 'Please add the sample material delivery address.' });
       return;
     }
 
@@ -279,6 +334,12 @@ const CreatePAC = ({ navigation, route }: any) => {
       formData.append(`gifts[${index}][gift_id]`, String(gift.gift_id));
       formData.append(`gifts[${index}][quantity]`, String(gift.quantity));
     });
+    if (hasPopMaterial) formData.append('pop_delivery_address', popDeliveryAddress.trim());
+    selectedSamples.forEach((sample, index) => {
+      formData.append(`sample_materials[${index}][name]`, sample.name);
+      formData.append(`sample_materials[${index}][quantity]`, String(sample.quantity));
+    });
+    if (hasSampleMaterial) formData.append('sample_delivery_address', sampleDeliveryAddress.trim());
     formData.append('company_share', String(Number(companyShare || 0)));
     formData.append('distributor_share', String(Number(distributorShare || 0)));
     if (remark.trim()) formData.append('remark', remark.trim());
@@ -451,8 +512,19 @@ const CreatePAC = ({ navigation, route }: any) => {
           </View>
         </View>
 
-        <View style={styles.fieldGroup}>
-          <FormLabel>GIFTS</FormLabel>
+        <View style={styles.materialChoices}>
+          <Pressable style={styles.checkboxRow} onPress={() => setHasPopMaterial(current => !current)}>
+            <Checkbox checked={hasPopMaterial} />
+            <AppText color={colors.black} size={15} family="InterSemiBold">PAP Material</AppText>
+          </Pressable>
+          <Pressable style={styles.checkboxRow} onPress={() => setHasSampleMaterial(current => !current)}>
+            <Checkbox checked={hasSampleMaterial} />
+            <AppText color={colors.black} size={15} family="InterSemiBold">Sample Material</AppText>
+          </Pressable>
+        </View>
+
+        {hasPopMaterial ? <View style={styles.fieldGroup}>
+          <FormLabel>PAP MATERIAL</FormLabel>
           {gifts.map(gift => (
             <View style={styles.giftRow} key={gift.rowId}>
               <Dropdown
@@ -465,7 +537,7 @@ const CreatePAC = ({ navigation, route }: any) => {
                 valueField="value"
                 value={gift.giftId}
                 disable={giftsLoading}
-                placeholder={giftsLoading ? 'Loading gifts...' : 'Select gift'}
+                placeholder={giftsLoading ? 'Loading materials...' : 'Select PAP material'}
                 onChange={item => updateGiftSelection(gift.rowId, item.value)}
                 renderRightIcon={() => giftsLoading ? <ActivityIndicator size="small" color={colors.blue} /> : <ChevronDown />}
               />
@@ -486,10 +558,64 @@ const CreatePAC = ({ navigation, route }: any) => {
           ))}
           <Pressable style={styles.addGiftButton} onPress={addGift}>
             <AppText color={colors.blue} size={20} family="InterRegular">+</AppText>
-            <AppText color={colors.blue} size={14} family="InterBold">Add Gift</AppText>
+            <AppText color={colors.blue} size={14} family="InterBold">Add PAP Material</AppText>
           </Pressable>
+          {showPopAddress ? <TextInput
+            value={popDeliveryAddress}
+            onChangeText={setPopDeliveryAddress}
+            placeholder="PAP material delivery address"
+            placeholderTextColor="#929BAD"
+            multiline
+            textAlignVertical="top"
+            style={[styles.textInput, styles.addressInput]}
+          /> : <Pressable style={styles.addGiftButton} onPress={() => setShowPopAddress(true)}>
+            <AppText color={colors.blue} size={20}>+</AppText>
+            <AppText color={colors.blue} size={14} family="InterBold">Add Delivery Address</AppText>
+          </Pressable>}
           {giftsError ? <AppText color="#BE0B0B" size={12}>{giftsError}</AppText> : null}
-        </View>
+        </View> : null}
+
+        {hasSampleMaterial ? <View style={styles.fieldGroup}>
+          <FormLabel>SAMPLE MATERIAL</FormLabel>
+          {sampleMaterials.map(sample => (
+            <View style={styles.giftRow} key={sample.rowId}>
+              <TextInput
+                value={sample.name}
+                onChangeText={name => setSampleMaterials(current => current.map(item => item.rowId === sample.rowId ? { ...item, name } : item))}
+                placeholder="Enter sample material"
+                placeholderTextColor="#929BAD"
+                style={[styles.textInput, styles.giftSelect]}
+              />
+              <TextInput
+                value={sample.quantity}
+                onChangeText={quantity => setSampleMaterials(current => current.map(item => item.rowId === sample.rowId ? { ...item, quantity: quantity.replace(/[^0-9]/g, '') } : item))}
+                placeholder="Qty"
+                placeholderTextColor="#929BAD"
+                keyboardType="number-pad"
+                style={[styles.textInput, styles.quantityInput]}
+              />
+              {sampleMaterials.length > 1 ? <Pressable style={styles.deleteButton} onPress={() => setSampleMaterials(current => current.filter(item => item.rowId !== sample.rowId))}>
+                <DeleteIcon />
+              </Pressable> : null}
+            </View>
+          ))}
+          <Pressable style={styles.addGiftButton} onPress={addSampleMaterial}>
+            <AppText color={colors.blue} size={20}>+</AppText>
+            <AppText color={colors.blue} size={14} family="InterBold">Add Sample</AppText>
+          </Pressable>
+          {showSampleAddress ? <TextInput
+            value={sampleDeliveryAddress}
+            onChangeText={setSampleDeliveryAddress}
+            placeholder="Sample material delivery address"
+            placeholderTextColor="#929BAD"
+            multiline
+            textAlignVertical="top"
+            style={[styles.textInput, styles.addressInput]}
+          /> : <Pressable style={styles.addGiftButton} onPress={() => setShowSampleAddress(true)}>
+            <AppText color={colors.blue} size={20}>+</AppText>
+            <AppText color={colors.blue} size={14} family="InterBold">Add Delivery Address</AppText>
+          </Pressable>}
+        </View> : null}
 
         <View style={styles.fieldGroup}>
           <FormLabel>OTHER EXPENSE AMOUNT</FormLabel>
@@ -595,6 +721,10 @@ const styles = StyleSheet.create({
   backButton: { width: 42, height: 38, justifyContent: 'center' },
   content: { padding: 18 },
   fieldGroup: { marginBottom: 22, gap: 9 },
+  materialChoices: { marginBottom: 22, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  checkboxRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  checkbox: { width: 22, height: 22, borderWidth: 1.5, borderColor: '#AEBAD1', borderRadius: 5, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center' },
+  checkboxChecked: { borderColor: colors.blue, backgroundColor: colors.blue },
   input: {
     minHeight: 52,
     paddingHorizontal: 15,
@@ -617,6 +747,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   multilineInput: { height: 90, paddingTop: 14 },
+  addressInput: { minHeight: 76, paddingTop: 14 },
   attachmentRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 9 },
   attachmentBox: {
     width: 72,
